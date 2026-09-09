@@ -1,0 +1,11 @@
+# Bao mat: khong commit token va session nhay cam
+*.log
+app-server-token
+auth.json
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+sessions/
+shell_snapshots/
+node_modules/
+.DS_Store

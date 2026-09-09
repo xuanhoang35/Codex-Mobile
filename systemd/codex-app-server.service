@@ -1,0 +1,21 @@
+[Unit]
+Description=Codex App Server
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=codexapp
+Group=codexapp
+WorkingDirectory=/srv/codex-workspaces
+Environment=HOME=/home/codexapp
+ExecStart=/usr/bin/codex app-server --listen ws://127.0.0.1:4500 --ws-auth capability-token --ws-token-file /home/codexapp/.codex/app-server-token
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/home/codexapp /srv/codex-workspaces
+
+[Install]
+WantedBy=multi-user.target

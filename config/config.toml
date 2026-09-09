@@ -1,0 +1,7 @@
+# Codex Mobile App Server Configuration
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+cli_auth_credentials_store = "file"
+
+[projects."/srv/codex-workspaces"]
+trust_level = "trusted"

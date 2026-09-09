@@ -1,0 +1,10 @@
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap-userns-restrict /usr/bin/bwrap flags=(attach_disconnected) {
+  include <abstractions/base>
+  capability sys_admin,
+  capability setuid,
+  capability setgid,
+  userns,
+}
