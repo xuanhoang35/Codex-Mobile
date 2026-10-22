@@ -1,0 +1,3 @@
+rootProject.name = 'Codex Mobile'
+
+include 'app'
