@@ -979,8 +979,8 @@ private fun ApprovalPanel(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = { onDecision(false) }) {
                     Text("Từ chối", color = DangerRed)

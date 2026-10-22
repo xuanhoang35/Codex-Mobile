@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
         setContent {
-            val viewModel: CodexViewModel = viewModel(factory = CodexViewModel.factory(applicationContext))
+            val viewModel: CodexViewModel = viewModel()
             CodexApp(viewModel)
         }
     }

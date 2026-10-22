@@ -15,11 +15,19 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class CodexWebSocketClient(
-    val endpoint: String,
-    val token: String,
-    val workspace: String,
+    var endpoint: String,
+    var token: String,
+    var workspace: String,
     val listener: Listener
 ) {
+    constructor(tokenProvider: () -> String?, listener: Listener) : this(
+        endpoint = "wss://intsoft-codebank-vn.tailb240ce.ts.net:8443/",
+        token = tokenProvider() ?: "",
+        workspace = "/srv/codex-workspaces",
+        listener = listener
+    )
+
+    var activeThreadId: String? = null
     interface Listener {
         fun onConnectionChanged(status: String, connected: Boolean)
         fun onInitialized()
@@ -95,6 +103,12 @@ class CodexWebSocketClient(
         webSocket = httpClient.newWebSocket(request, SocketListener())
     }
 
+    fun connect(newEndpoint: String? = null, newWorkspace: String? = null) {
+        if (!newEndpoint.isNullOrBlank()) this.endpoint = newEndpoint
+        if (!newWorkspace.isNullOrBlank()) this.workspace = newWorkspace
+        connect()
+    }
+
     fun disconnect() {
         manualDisconnect = true
         reconnectScheduled.set(false)
@@ -139,6 +153,19 @@ class CodexWebSocketClient(
     fun unarchiveThread(threadId: String) {
         val params = JSONObject().put("threadId", threadId)
         sendThreadMutation("thread/unarchive", params)
+    }
+
+    fun deleteThread(threadId: String) {
+        val params = JSONObject().put("threadId", threadId)
+        sendThreadMutation("thread/delete", params)
+    }
+
+    fun refreshArchivedThreads(searchTerm: String = "") {
+        refreshThreads(archived = true, searchTerm = searchTerm)
+    }
+
+    fun startAccountLogin() {
+        startDeviceCodeLogin()
     }
 
     private fun sendThreadMutation(method: String, params: JSONObject) {
@@ -236,6 +263,42 @@ class CodexWebSocketClient(
     fun interruptTurn(threadId: String, turnId: String): Boolean {
         val params = JSONObject().put("threadId", threadId).put("turnId", turnId)
         return sendRequest("turn/interrupt", requestIds.getAndIncrement(), params)
+    }
+
+    fun startNewThread(threadId: String? = null, model: String? = null, mode: PermissionMode = PermissionMode.ASK) {
+        startNewThread(model, mode)
+    }
+
+    fun loadThreadHistory(threadId: String, model: String? = null, mode: PermissionMode = PermissionMode.ASK) {
+        activeThreadId = threadId
+        resumeThread(threadId, model, mode)
+    }
+
+    fun sendPrompt(
+        prompt: String,
+        model: String? = null,
+        effort: String? = null,
+        permission: PermissionMode = PermissionMode.ASK,
+        imageDataUrls: List<String> = emptyList()
+    ): Boolean {
+        val tid = activeThreadId
+        return if (tid != null) {
+            startTurn(tid, prompt, model, effort, permission, imageDataUrls)
+        } else {
+            startNewThread(model, permission)
+            true
+        }
+    }
+
+    fun interrupt() {
+        val tid = activeThreadId
+        if (tid != null) {
+            interruptTurn(tid, "")
+        }
+    }
+
+    fun decideApproval(requestId: Any, allow: Boolean): Boolean {
+        return resolveApproval(requestId, if (allow) "accept" else "reject")
     }
 
     fun resolveApproval(requestId: Any, decision: String): Boolean {
@@ -530,6 +593,7 @@ class CodexWebSocketClient(
     private fun parseOpenedThread(result: JSONObject) {
         val thread = result.optJSONObject("thread") ?: result
         val threadId = thread.optString("id")
+        activeThreadId = threadId
         val model = thread.optString("model").takeIf { it.isNotBlank() }
         val turns = thread.optJSONArray("turns") ?: JSONArray()
 

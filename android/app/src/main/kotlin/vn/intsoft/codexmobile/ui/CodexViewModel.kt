@@ -25,57 +25,113 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<CodexUiState> = _uiState.asStateFlow()
 
     private val webSocketClient = CodexWebSocketClient(
-        tokenProvider = { tokenStore.getToken() },
+        tokenProvider = { tokenStore.getToken() ?: "" },
         listener = object : CodexWebSocketClient.Listener {
-            override fun onConnecting() {
-                _uiState.update { it.copy(connectionStatus = "Đang kết nối...") }
-            }
-
-            override fun onConnected() {
+            override fun onConnectionChanged(status: String, connected: Boolean) {
                 _uiState.update {
                     it.copy(
-                        isConnected = true,
+                        isConnected = connected,
+                        connectionStatus = status,
+                        lastErrorMessage = if (connected) null else it.lastErrorMessage
+                    )
+                }
+            }
+
+            override fun onInitialized() {
+                _uiState.update {
+                    it.copy(
                         isInitialized = true,
-                        connectionStatus = "Đã kết nối",
-                        lastErrorMessage = null
+                        isConnected = true,
+                        connectionStatus = "Đã kết nối"
                     )
                 }
                 refreshThreads()
             }
 
-            override fun onDisconnected(reason: String) {
-                _uiState.update {
-                    it.copy(
-                        isConnected = false,
-                        connectionStatus = "Mất kết nối: $reason"
+            override fun onModelsLoaded(models: List<CodexModel>) {
+                _uiState.update { state ->
+                    val cur = state.selectedModelId
+                    val def = models.firstOrNull { it.isDefault }?.id ?: models.firstOrNull()?.id ?: cur
+                    state.copy(
+                        availableModels = models,
+                        selectedModelId = if (cur.isBlank()) def else cur
                     )
                 }
             }
 
-            override fun onError(error: String) {
+            override fun onThreadsLoaded(threads: List<ThreadSummary>, archived: Boolean, searchTerm: String) {
+                _uiState.update {
+                    if (archived) {
+                        it.copy(archivedThreads = threads, isLoadingArchive = false)
+                    } else {
+                        it.copy(threads = threads)
+                    }
+                }
+            }
+
+            override fun onThreadLibraryChanged() {
+                refreshThreads()
+            }
+
+            override fun onUsageLoaded(usage: UsageSnapshot) {
+                _uiState.update { it.copy(usage = usage) }
+            }
+
+            override fun onAccountLoaded(account: CodexAccount) {
+                _uiState.update { it.copy(account = account) }
+            }
+
+            override fun onAccountLoginChallenge(challenge: AccountLoginChallenge) {
+                _uiState.update { it.copy(loginChallenge = challenge) }
+            }
+
+            override fun onAccountLoginCompleted(success: Boolean, error: String?) {
                 _uiState.update {
                     it.copy(
-                        lastErrorMessage = error,
-                        connectionStatus = "Lỗi kết nối"
+                        loginChallenge = null,
+                        lastErrorMessage = if (!success) error ?: "Đăng nhập thất bại" else null
                     )
                 }
             }
 
-            override fun onMessageChunk(chunk: String) {
+            override fun onAccountLogoutCompleted() {
+                _uiState.update { it.copy(account = null) }
+            }
+
+            override fun onThreadReady(threadId: String, title: String, model: String?, messages: List<HistoryMessage>) {
+                _uiState.update { state ->
+                    state.copy(
+                        activeThreadId = threadId,
+                        activeThreadTitle = title,
+                        messages = messages.map { h ->
+                            ChatMessage(
+                                id = h.id.ifBlank { UUID.randomUUID().toString() },
+                                role = if (h.isUser) MessageRole.USER else MessageRole.ASSISTANT,
+                                content = h.text,
+                                engine = AiEngine.CODEX
+                            )
+                        },
+                        isResponding = false,
+                        streamingResponse = ""
+                    )
+                }
+            }
+
+            override fun onAgentDelta(itemId: String, delta: String) {
                 _uiState.update {
                     it.copy(
                         isResponding = true,
-                        streamingResponse = it.streamingResponse + chunk
+                        streamingResponse = it.streamingResponse + delta
                     )
                 }
             }
 
-            override fun onMessageComplete(fullText: String) {
-                val currentStreaming = _uiState.value.streamingResponse
-                val finalText = fullText.ifBlank { currentStreaming }
+            override fun onAgentCompleted(itemId: String, text: String) {
+                val current = _uiState.value.streamingResponse
+                val finalText = text.ifBlank { current }
                 if (finalText.isNotBlank()) {
                     val assistantMsg = ChatMessage(
-                        id = UUID.randomUUID().toString(),
+                        id = itemId.ifBlank { UUID.randomUUID().toString() },
                         role = MessageRole.ASSISTANT,
                         content = finalText,
                         engine = _uiState.value.activeEngine
@@ -92,34 +148,41 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            override fun onApprovalRequired(id: String, command: String, reason: String) {
+            override fun onTurnStarted(turnId: String) {
+                _uiState.update { it.copy(isResponding = true) }
+            }
+
+            override fun onTurnCompleted() {
+                _uiState.update { it.copy(isResponding = false) }
+            }
+
+            override fun onActivity(status: String) {
+                _uiState.update { it.copy(connectionStatus = status) }
+            }
+
+            override fun onApprovalRequested(approval: CodexWebSocketClient.ApprovalRequest) {
                 _uiState.update {
-                    it.copy(pendingApproval = PendingApproval(id, command, reason))
+                    it.copy(
+                        pendingApproval = PendingApproval(
+                            id = approval.requestId.toString(),
+                            command = approval.title,
+                            reason = approval.details
+                        )
+                    )
                 }
             }
 
-            override fun onUsageUpdated(usage: UsageSnapshot) {
-                _uiState.update { it.copy(usage = usage) }
+            override fun onApprovalResolved(requestId: Any) {
+                _uiState.update { it.copy(pendingApproval = null) }
             }
 
-            override fun onAccountUpdated(account: CodexAccount?) {
-                _uiState.update { it.copy(account = account) }
-            }
-
-            override fun onLoginChallenge(challenge: AccountLoginChallenge?) {
-                _uiState.update { it.copy(loginChallenge = challenge) }
-            }
-
-            override fun onThreadsUpdated(threads: List<ThreadSummary>) {
-                _uiState.update { it.copy(threads = threads) }
-            }
-
-            override fun onArchivedThreadsUpdated(threads: List<ThreadSummary>) {
-                _uiState.update { it.copy(archivedThreads = threads, isLoadingArchive = false) }
-            }
-
-            override fun onHistoryMessagesLoaded(messages: List<ChatMessage>) {
-                _uiState.update { it.copy(messages = messages) }
+            override fun onError(message: String) {
+                _uiState.update {
+                    it.copy(
+                        lastErrorMessage = message,
+                        connectionStatus = "Lỗi kết nối: $message"
+                    )
+                }
             }
         }
     )
@@ -599,5 +662,14 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         webSocketClient.disconnect()
+    }
+
+    companion object {
+        fun factory(context: android.content.Context) = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return CodexViewModel(context.applicationContext as Application) as T
+            }
+        }
     }
 }

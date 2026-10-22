@@ -29,45 +29,64 @@ data class GoogleUserProfile(
 data class CodexModel(
     val id: String,
     val name: String,
+    val defaultEffort: String? = null,
+    val efforts: List<String> = emptyList(),
+    val isDefault: Boolean = false,
     val description: String = "",
     val engine: AiEngine = AiEngine.CODEX
-)
+) {
+    constructor(id: String, name: String, description: String = "", engine: AiEngine = AiEngine.CODEX) :
+        this(id, name, null, emptyList(), false, description, engine)
+}
 
 data class CodexAccount(
-    val id: String,
     val email: String,
-    val planType: String,
+    val planType: String? = null,
+    val type: String = "chatgpt",
+    val id: String = email,
     val provider: String = "openai"
 )
 
 data class HistoryMessage(
-    val role: String,
-    val content: String,
+    val id: String = "",
+    val isUser: Boolean = false,
+    val text: String = "",
+    val role: String = if (isUser) "user" else "assistant",
+    val content: String = text,
     val engine: String = "codex"
 )
 
 data class ThreadSummary(
     val id: String,
     val title: String,
-    val snippet: String,
-    val updatedAt: Long,
+    val preview: String? = null,
+    val updatedAt: Long = 0L,
+    val cwd: String = "",
     val isArchived: Boolean = false,
-    val engine: String = "codex"
+    val engine: String = "codex",
+    val snippet: String = preview ?: ""
 )
 
 data class UsageWindow(
-    val usedPercent: Float,
-    val resetsInHours: Int? = null
+    val usedPercent: Int = 0,
+    val windowDurationMins: Long? = null,
+    val resetsAt: Long? = null,
+    val resetsInHours: Int? = resetsAt?.let { ((it - System.currentTimeMillis() / 1000) / 3600).toInt().coerceAtLeast(0) }
 )
 
 data class UsageSnapshot(
     val primary: UsageWindow? = null,
-    val secondary: UsageWindow? = null
+    val secondary: UsageWindow? = null,
+    val creditBalance: String? = null,
+    val creditsUnlimited: Boolean = false,
+    val planType: String? = null
 )
 
 data class AccountLoginChallenge(
-    val userCode: String,
-    val verificationUri: String
+    val loginId: String = "",
+    val verificationUrl: String = "",
+    val userCode: String = "",
+    val verificationUri: String = verificationUrl
 )
 
 data class QueuedTurnRecord(

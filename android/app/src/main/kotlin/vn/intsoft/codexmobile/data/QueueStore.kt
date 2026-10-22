@@ -2,6 +2,7 @@ package vn.intsoft.codexmobile.data
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -58,22 +59,44 @@ class QueueStore(context: Context) {
             .apply()
     }
 
+    fun getAll(): List<QueuedTurnRecord> = load()
+
+    fun add(text: String): QueuedTurnRecord {
+        val record = QueuedTurnRecord(java.util.UUID.randomUUID().toString(), text)
+        val current = load().toMutableList()
+        current.add(record)
+        save(current)
+        return record
+    }
+
+    fun update(id: String, text: String) {
+        val current = load().map { if (it.id == id) it.copy(text = text) else it }
+        save(current)
+    }
+
+    fun delete(id: String) {
+        save(load().filterNot { it.id == id })
+    }
+
+    fun clear() {
+        save(emptyList())
+    }
+
     private fun getOrCreateKey(): SecretKey {
         val existing = keyStore.getKey("codex_mobile_queue_key", null) as? SecretKey
         if (existing != null) return existing
 
-        val keyGenerator = KeyGenerator.getInstance("AES", "AndroidKeyStore")
+        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         keyGenerator.init(
             KeyGenParameterSpec.Builder(
                 "codex_mobile_queue_key",
-                KeyGenParameterSpec.PURPOSE_ENCRYPT or KeyGenParameterSpec.PURPOSE_DECRYPT
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
             )
-                .setBlockModes("GCM")
-                .setEncryptionPaddings("NoPadding")
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
                 .build()
         )
         return keyGenerator.generateKey()
     }
 }
-
