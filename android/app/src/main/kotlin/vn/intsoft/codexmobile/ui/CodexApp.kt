@@ -65,7 +65,8 @@ fun CodexApp(viewModel: CodexViewModel) {
     var showActivityLogs by remember { mutableStateOf(false) }
     var showUsageDialog by remember { mutableStateOf(false) }
     var showArchiveDialog by remember { mutableStateOf(false) }
-    var showGoogleLoginDialog by remember { mutableStateOf(false) }
+    var showAntigravityLoginDialog by remember { mutableStateOf(false) }
+    var showClineLoginDialog by remember { mutableStateOf(false) }
     var renameTargetThread by remember { mutableStateOf<ThreadSummary?>(null) }
     var threadActionTarget by remember { mutableStateOf<ThreadSummary?>(null) }
 
@@ -124,8 +125,20 @@ fun CodexApp(viewModel: CodexViewModel) {
                 // Multi-Engine Selector Row
                 if (!state.showHistory) {
                     EngineSelectorBar(
-                        activeEngine = state.activeEngine,
-                        onSelectEngine = { viewModel.selectEngine(it) }
+                        state = state,
+                        onSelectEngine = { viewModel.selectEngine(it) },
+                        onOpenAntigravityLogin = {
+                            showAntigravityLoginDialog = true
+                            viewModel.openAntigravityBrowserLogin(context)
+                        },
+                        onOpenClineLogin = {
+                            showClineLoginDialog = true
+                            viewModel.openClineBrowserLogin(context)
+                        },
+                        onOpenCodexLogin = { viewModel.startAccountLogin() },
+                        onSignOutAntigravity = { viewModel.signOutAntigravity() },
+                        onSignOutCline = { viewModel.signOutCline() },
+                        onSignOutCodex = { viewModel.logoutAccount() }
                     )
                 }
             }
@@ -196,8 +209,18 @@ fun CodexApp(viewModel: CodexViewModel) {
             onSwitchAccount = { viewModel.startAccountLogin() },
             onLogoutAccount = { viewModel.logoutAccount() },
             onRefreshAccount = { viewModel.refreshAccount() },
-            onOpenGoogleLogin = { showGoogleLoginDialog = true },
-            onSignOutGoogle = { viewModel.signOutGoogle() },
+            onOpenAntigravityLogin = {
+                showSettings = false
+                showAntigravityLoginDialog = true
+                viewModel.openAntigravityBrowserLogin(context)
+            },
+            onSignOutAntigravity = { viewModel.signOutAntigravity() },
+            onOpenClineLogin = {
+                showSettings = false
+                showClineLoginDialog = true
+                viewModel.openClineBrowserLogin(context)
+            },
+            onSignOutCline = { viewModel.signOutCline() },
             onOpenArchive = {
                 showSettings = false
                 showArchiveDialog = true
@@ -210,15 +233,27 @@ fun CodexApp(viewModel: CodexViewModel) {
         )
     }
 
-    // Dialog: Google Sign-In Simulation / Web Flow
-    if (showGoogleLoginDialog) {
-        GoogleLoginDialog(
-            currentUser = state.googleUser,
-            onSignIn = { email, name ->
-                viewModel.signInWithGoogle(email, name, "oauth_token_google_${System.currentTimeMillis()}")
-                showGoogleLoginDialog = false
+    // Dialog: Antigravity Browser Google Sign-In
+    if (showAntigravityLoginDialog) {
+        AntigravityBrowserLoginDialog(
+            currentUser = state.antigravityUser,
+            onSignIn = { email, displayName, key ->
+                viewModel.signInAntigravityGoogle(email, displayName, key)
+                showAntigravityLoginDialog = false
             },
-            onDismiss = { showGoogleLoginDialog = false }
+            onDismiss = { showAntigravityLoginDialog = false }
+        )
+    }
+
+    // Dialog: Cline Browser Google Sign-In
+    if (showClineLoginDialog) {
+        ClineBrowserLoginDialog(
+            currentUser = state.clineUser,
+            onSignIn = { email, displayName, key ->
+                viewModel.signInClineGoogle(email, displayName, key)
+                showClineLoginDialog = false
+            },
+            onDismiss = { showClineLoginDialog = false }
         )
     }
 
@@ -329,42 +364,186 @@ fun CodexApp(viewModel: CodexViewModel) {
 
 @Composable
 fun EngineSelectorBar(
-    activeEngine: AiEngine,
-    onSelectEngine: (AiEngine) -> Unit
+    state: CodexUiState,
+    onSelectEngine: (AiEngine) -> Unit,
+    onOpenAntigravityLogin: () -> Unit,
+    onOpenClineLogin: () -> Unit,
+    onOpenCodexLogin: () -> Unit,
+    onSignOutAntigravity: () -> Unit,
+    onSignOutCline: () -> Unit,
+    onSignOutCodex: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(PanelBackground)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        AiEngine.values().forEach { engine ->
-            val isSelected = engine == activeEngine
-            val activeColor = when (engine) {
-                AiEngine.CODEX -> CodexGreen
-                AiEngine.ANTIGRAVITY -> AntigravityPurple
-                AiEngine.CLINE -> ClineOrange
-            }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AiEngine.values().forEach { engine ->
+                val isSelected = engine == state.activeEngine
+                val activeColor = when (engine) {
+                    AiEngine.CODEX -> CodexGreen
+                    AiEngine.ANTIGRAVITY -> AntigravityPurple
+                    AiEngine.CLINE -> ClineOrange
+                }
 
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isSelected) activeColor.copy(alpha = 0.25f) else InputBackground)
-                    .clickable { onSelectEngine(engine) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = engine.icon, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = engine.title,
-                        color = if (isSelected) activeColor else SecondaryText,
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) activeColor.copy(alpha = 0.25f) else InputBackground)
+                        .clickable { onSelectEngine(engine) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = engine.icon, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = engine.title,
+                            color = if (isSelected) activeColor else SecondaryText,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        // Active Engine Specific Account Strip
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 2.dp)
+        ) {
+            when (state.activeEngine) {
+                AiEngine.ANTIGRAVITY -> {
+                    val user = state.antigravityUser
+                    if (user != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(InputBackground)
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("🪐", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = user.email,
+                                    color = PrimaryText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            TextButton(
+                                onClick = onSignOutAntigravity,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            ) {
+                                Text("Đăng xuất", color = DangerRed, fontSize = 11.sp)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = onOpenAntigravityLogin,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("🌐 Đăng nhập Google (Gmail) cho Antigravity", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                AiEngine.CLINE -> {
+                    val user = state.clineUser
+                    if (user != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(InputBackground)
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("🤖", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = user.email,
+                                    color = PrimaryText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            TextButton(
+                                onClick = onSignOutCline,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            ) {
+                                Text("Đăng xuất", color = DangerRed, fontSize = 11.sp)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = onOpenClineLogin,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = ClineOrange),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("🌐 Đăng nhập Google (Gmail) cho Cline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                AiEngine.CODEX -> {
+                    val account = state.account
+                    if (account != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(InputBackground)
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("⚡", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = account.email,
+                                    color = PrimaryText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            TextButton(
+                                onClick = onSignOutCodex,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            ) {
+                                Text("Đăng xuất", color = DangerRed, fontSize = 11.sp)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = onOpenCodexLogin,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = CodexGreen),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Text("🌐 Đăng nhập OpenAI / ChatGPT qua Trình duyệt", color = AppBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
@@ -1349,8 +1528,10 @@ private fun SettingsDialog(
     onSwitchAccount: () -> Unit,
     onLogoutAccount: () -> Unit,
     onRefreshAccount: () -> Unit,
-    onOpenGoogleLogin: () -> Unit,
-    onSignOutGoogle: () -> Unit,
+    onOpenAntigravityLogin: () -> Unit,
+    onSignOutAntigravity: () -> Unit,
+    onOpenClineLogin: () -> Unit,
+    onSignOutCline: () -> Unit,
     onOpenArchive: () -> Unit,
     onCompletionNotificationsChanged: (Boolean) -> Unit,
     onOpenActivityLog: () -> Unit
@@ -1371,9 +1552,9 @@ private fun SettingsDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Google Account Section (Gmail for Antigravity & Cline)
+                // Antigravity (Google Gemini) Section
                 item {
-                    Text("Đăng nhập Google (Gmail) - Antigravity & Cline", color = GoogleBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("🪐 Antigravity (Google Gemini / DeepMind)", color = AntigravityPurple, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -1381,37 +1562,97 @@ private fun SettingsDialog(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
-                            if (state.googleUser != null) {
+                            if (state.antigravityUser != null) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("🟢", fontSize = 12.sp)
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column {
-                                        Text(state.googleUser.displayName, color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text(state.googleUser.email, color = SecondaryText, fontSize = 12.sp)
+                                        Text(state.antigravityUser.displayName, color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(state.antigravityUser.email, color = SecondaryText, fontSize = 12.sp)
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedButton(onClick = onSignOutGoogle) {
-                                    Text("Đăng xuất Google", color = DangerRed, fontSize = 11.sp)
+                                OutlinedButton(onClick = onSignOutAntigravity) {
+                                    Text("Đăng xuất Google (Antigravity)", color = DangerRed, fontSize = 11.sp)
                                 }
                             } else {
-                                Text("Chưa liên kết tài khoản Google", color = SecondaryText, fontSize = 12.sp)
+                                Text("Chưa đăng nhập Google cho Antigravity", color = SecondaryText, fontSize = 12.sp)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
-                                    onClick = onOpenGoogleLogin,
-                                    colors = ButtonDefaults.buttonColors(containerColor = GoogleBlue)
+                                    onClick = onOpenAntigravityLogin,
+                                    colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("Đăng nhập Google (Gmail)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("🌐 Đăng nhập Google (Gmail) qua Trình duyệt", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DarkTextField(
+                        value = antigravityKey,
+                        onValueChange = { antigravityKey = it },
+                        label = "Google AI Studio API Key (tự động nhận từ Google)",
+                        isPassword = true
+                    )
+                }
+
+                // Cline (Universal Agent) Section
+                item {
+                    HorizontalDivider(color = BorderColor, modifier = Modifier.padding(vertical = 4.dp))
+                    Text("🤖 Cline (Claude 3.7 / Universal Agent)", color = ClineOrange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = InputBackground),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            if (state.clineUser != null) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("🟢", fontSize = 12.sp)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(state.clineUser.displayName, color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(state.clineUser.email, color = SecondaryText, fontSize = 12.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(onClick = onSignOutCline) {
+                                    Text("Đăng xuất Google (Cline)", color = DangerRed, fontSize = 11.sp)
+                                }
+                            } else {
+                                Text("Chưa đăng nhập Google cho Cline", color = SecondaryText, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = onOpenClineLogin,
+                                    colors = ButtonDefaults.buttonColors(containerColor = ClineOrange),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("🌐 Đăng nhập Google (Gmail) qua Trình duyệt", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DarkTextField(
+                        value = clineEndpoint,
+                        onValueChange = { clineEndpoint = it },
+                        label = "Endpoint OpenRouter hoặc API tùy chọn"
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DarkTextField(
+                        value = clineKey,
+                        onValueChange = { clineKey = it },
+                        label = "OpenRouter / Claude API Key",
+                        isPassword = true
+                    )
                 }
 
                 // Codex Server Section
                 item {
-                    Divider(color = BorderColor, modifier = Modifier.padding(vertical = 4.dp))
-                    Text("Cấu hình Codex Server (OpenAI)", color = CodexGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    HorizontalDivider(color = BorderColor, modifier = Modifier.padding(vertical = 4.dp))
+                    Text("⚡ Cấu hình Codex Server (OpenAI)", color = CodexGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     DarkTextField(
                         value = endpoint,
@@ -1429,38 +1670,6 @@ private fun SettingsDialog(
                         value = token,
                         onValueChange = { token = it },
                         label = "Codex Secret Token (tùy chọn)",
-                        isPassword = true
-                    )
-                }
-
-                // Antigravity (Google Gemini) Section
-                item {
-                    Divider(color = BorderColor, modifier = Modifier.padding(vertical = 4.dp))
-                    Text("Antigravity (Google AI / Vertex / Gemini)", color = AntigravityPurple, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    DarkTextField(
-                        value = antigravityKey,
-                        onValueChange = { antigravityKey = it },
-                        label = "Google AI Studio API Key (tùy chọn nếu dùng Google login)",
-                        isPassword = true
-                    )
-                }
-
-                // Cline (Universal Agent) Section
-                item {
-                    Divider(color = BorderColor, modifier = Modifier.padding(vertical = 4.dp))
-                    Text("Cline (Claude 3.7 / DeepSeek / OpenRouter)", color = ClineOrange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    DarkTextField(
-                        value = clineEndpoint,
-                        onValueChange = { clineEndpoint = it },
-                        label = "Endpoint OpenRouter hoặc API tùy chọn"
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    DarkTextField(
-                        value = clineKey,
-                        onValueChange = { clineKey = it },
-                        label = "OpenRouter / Claude API Key",
                         isPassword = true
                     )
                 }
@@ -1578,19 +1787,20 @@ private fun SettingsDialog(
 }
 
 @Composable
-fun GoogleLoginDialog(
+fun AntigravityBrowserLoginDialog(
     currentUser: GoogleUserProfile?,
-    onSignIn: (email: String, name: String) -> Unit,
+    onSignIn: (email: String, displayName: String, key: String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var email by remember { mutableStateOf(currentUser?.email ?: "") }
-    var name by remember { mutableStateOf(currentUser?.displayName ?: "") }
+    var apiKey by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Đăng nhập Google (Gmail)", color = PrimaryText, fontWeight = FontWeight.Bold)
+                Text("🪐 Đăng nhập Google Antigravity", color = PrimaryText, fontWeight = FontWeight.Bold)
             }
         },
         text = {
@@ -1599,34 +1809,65 @@ fun GoogleLoginDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Tài khoản Google dùng chung để kích hoạt Antigravity (Gemini 2.5) và Cline mà không cần tạo lại nhiều tài khoản:",
+                    text = "1. Bấm nút dưới để mở trình duyệt ngoài đăng nhập Gmail của Google:\n" +
+                           "2. Xác thực tài khoản Gmail trên Google AI Studio.\n" +
+                           "3. Sao chép API Key rồi bấm 'Dán từ bộ nhớ tạm' để hoàn tất.",
                     color = SecondaryText,
-                    fontSize = 13.sp
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp
                 )
+                Button(
+                    onClick = {
+                        val url = "https://accounts.google.com/AccountChooser?service=lso&continue=https://aistudio.google.com/app/apikey"
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple)
+                ) {
+                    Text("🌐 Mở Trình Duyệt Đăng Nhập Google", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
                 DarkTextField(
                     value = email,
                     onValueChange = { email = it },
-                    label = "Địa chỉ Gmail (VD: user@gmail.com)"
+                    label = "Địa chỉ Gmail của bạn"
                 )
+
                 DarkTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = "Họ tên hiển thị"
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = "Google Gemini API Key / Token",
+                    isPassword = true
                 )
+
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        val clip = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                        if (clip.isNotBlank()) {
+                            apiKey = clip.trim()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("📋 Tự động dán từ bộ nhớ tạm", color = PrimaryText, fontSize = 12.sp)
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (email.isNotBlank()) {
-                        val displayName = name.ifBlank { email.substringBefore("@") }
-                        onSignIn(email.trim(), displayName.trim())
-                    }
+                    val cleanEmail = email.trim().ifBlank { "google_user@gmail.com" }
+                    val name = cleanEmail.substringBefore("@")
+                    onSignIn(cleanEmail, name, apiKey.trim())
                 },
-                enabled = email.contains("@"),
-                colors = ButtonDefaults.buttonColors(containerColor = GoogleBlue)
+                enabled = apiKey.isNotBlank() || email.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple)
             ) {
-                Text("Xác nhận đăng nhập", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Xác nhận & Hoàn tất", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -1635,6 +1876,113 @@ fun GoogleLoginDialog(
             }
         },
         containerColor = PanelBackground
+    )
+}
+
+@Composable
+fun ClineBrowserLoginDialog(
+    currentUser: GoogleUserProfile?,
+    onSignIn: (email: String, displayName: String, key: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var email by remember { mutableStateOf(currentUser?.email ?: "") }
+    var apiKey by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🤖 Đăng nhập Google Cline", color = PrimaryText, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "1. Bấm nút dưới để mở trình duyệt ngoài đăng nhập Google (OpenRouter):\n" +
+                           "2. Chọn 'Sign in with Google' bằng tài khoản Gmail của bạn.\n" +
+                           "3. Tạo khóa API rồi dán vào đây để Cline hoạt động không giới hạn.",
+                    color = SecondaryText,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp
+                )
+                Button(
+                    onClick = {
+                        val url = "https://openrouter.ai/auth/signin?callbackUrl=/keys"
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClineOrange)
+                ) {
+                    Text("🌐 Mở Trình Duyệt Đăng Nhập Google", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                DarkTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = "Địa chỉ Gmail của bạn"
+                )
+
+                DarkTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = "OpenRouter / Claude API Key",
+                    isPassword = true
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        val clip = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                        if (clip.isNotBlank()) {
+                            apiKey = clip.trim()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("📋 Tự động dán từ bộ nhớ tạm", color = PrimaryText, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val cleanEmail = email.trim().ifBlank { "cline_user@gmail.com" }
+                    val name = cleanEmail.substringBefore("@")
+                    onSignIn(cleanEmail, name, apiKey.trim())
+                },
+                enabled = apiKey.isNotBlank() || email.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = ClineOrange)
+            ) {
+                Text("Xác nhận & Hoàn tất", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy", color = SecondaryText)
+            }
+        },
+        containerColor = PanelBackground
+    )
+}
+
+// Backwards compatibility alias
+@Composable
+fun GoogleLoginDialog(
+    currentUser: GoogleUserProfile?,
+    onSignIn: (email: String, name: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AntigravityBrowserLoginDialog(
+        currentUser = currentUser,
+        onSignIn = { email, name, _ -> onSignIn(email, name) },
+        onDismiss = onDismiss
     )
 }
 

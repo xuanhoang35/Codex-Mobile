@@ -1,6 +1,8 @@
 package vn.intsoft.codexmobile.ui
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
@@ -194,7 +196,8 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadPersistedState() {
         val initialEngine = tokenStore.getActiveEngine()
-        val googleUser = tokenStore.getGoogleUser()
+        val antigravityUser = tokenStore.getAntigravityGoogleUser()
+        val clineUser = tokenStore.getClineGoogleUser()
         val antigravityKey = tokenStore.getAntigravityApiKey()
         val clineKey = tokenStore.getClineApiKey()
         val clineEndpoint = tokenStore.getClineEndpoint()
@@ -204,7 +207,9 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update {
             it.copy(
                 activeEngine = initialEngine,
-                googleUser = googleUser,
+                antigravityUser = antigravityUser,
+                clineUser = clineUser,
+                googleUser = if (initialEngine == AiEngine.CLINE) clineUser else antigravityUser,
                 antigravityApiKey = antigravityKey,
                 clineApiKey = clineKey,
                 clineCustomEndpoint = clineEndpoint,
@@ -217,39 +222,139 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // -------------------------------------------------------------------------
-    // Multi-Engine Selection & Google Sign-In
+    // Multi-Engine Selection & Google Sign-In (Antigravity & Cline riêng biệt)
     // -------------------------------------------------------------------------
     fun selectEngine(engine: AiEngine) {
         tokenStore.saveActiveEngine(engine)
         val models = multiEngineClient.getDefaultModelsForEngine(engine)
         _uiState.update {
+            val userForEngine = when (engine) {
+                AiEngine.CODEX -> null
+                AiEngine.ANTIGRAVITY -> it.antigravityUser
+                AiEngine.CLINE -> it.clineUser
+            }
             it.copy(
                 activeEngine = engine,
+                googleUser = userForEngine,
                 availableModels = models,
                 selectedModelId = engine.defaultModel,
                 connectionStatus = when (engine) {
                     AiEngine.CODEX -> if (it.isConnected) "Đã kết nối (Codex)" else "Mất kết nối server"
-                    AiEngine.ANTIGRAVITY -> "Sẵn sàng (Google Gemini / DeepMind)"
-                    AiEngine.CLINE -> "Sẵn sàng (Universal Agent / Claude)"
+                    AiEngine.ANTIGRAVITY -> if (it.antigravityUser != null || it.antigravityApiKey.isNotBlank()) "Sẵn sàng (Antigravity Google)" else "Chưa đăng nhập Google"
+                    AiEngine.CLINE -> if (it.clineUser != null || it.clineApiKey.isNotBlank()) "Sẵn sàng (Cline Agent)" else "Chưa đăng nhập Google"
                 }
             )
         }
     }
 
-    fun signInWithGoogle(email: String, displayName: String, token: String?) {
-        val user = GoogleUserProfile(
-            email = email,
-            displayName = displayName,
-            idToken = token,
-            accessToken = token
-        )
-        tokenStore.saveGoogleUser(user)
-        _uiState.update { it.copy(googleUser = user) }
+    fun openAntigravityBrowserLogin(context: Context) {
+        try {
+            val url = "https://accounts.google.com/AccountChooser?service=lso&continue=https://aistudio.google.com/app/apikey"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Throwable) {
+        }
     }
 
+    fun openClineBrowserLogin(context: Context) {
+        try {
+            val url = "https://openrouter.ai/auth/signin?callbackUrl=/keys"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun signInAntigravityGoogle(email: String, displayName: String, apiKeyOrToken: String) {
+        val cleanEmail = email.trim()
+        val user = GoogleUserProfile(
+            email = cleanEmail.ifBlank { "google_user@gmail.com" },
+            displayName = displayName.trim().ifBlank { cleanEmail.substringBefore("@") },
+            accessToken = apiKeyOrToken.trim()
+        )
+        tokenStore.saveAntigravityGoogleUser(user)
+        if (apiKeyOrToken.isNotBlank()) {
+            tokenStore.saveAntigravityApiKey(apiKeyOrToken.trim())
+        }
+        _uiState.update {
+            it.copy(
+                antigravityUser = user,
+                googleUser = if (it.activeEngine == AiEngine.ANTIGRAVITY) user else it.googleUser,
+                antigravityApiKey = if (apiKeyOrToken.isNotBlank()) apiKeyOrToken.trim() else it.antigravityApiKey,
+                connectionStatus = "Đã đăng nhập Google (Antigravity)"
+            )
+        }
+    }
+
+    fun signOutAntigravity() {
+        tokenStore.saveAntigravityGoogleUser(null)
+        tokenStore.saveAntigravityApiKey("")
+        _uiState.update {
+            it.copy(
+                antigravityUser = null,
+                antigravityApiKey = "",
+                googleUser = if (it.activeEngine == AiEngine.ANTIGRAVITY) null else it.googleUser,
+                connectionStatus = "Đã đăng xuất Google (Antigravity)"
+            )
+        }
+    }
+
+    fun signInClineGoogle(email: String, displayName: String, apiKeyOrToken: String) {
+        val cleanEmail = email.trim()
+        val user = GoogleUserProfile(
+            email = cleanEmail.ifBlank { "cline_user@gmail.com" },
+            displayName = displayName.trim().ifBlank { cleanEmail.substringBefore("@") },
+            accessToken = apiKeyOrToken.trim()
+        )
+        tokenStore.saveClineGoogleUser(user)
+        if (apiKeyOrToken.isNotBlank()) {
+            tokenStore.saveClineApiKey(apiKeyOrToken.trim())
+        }
+        _uiState.update {
+            it.copy(
+                clineUser = user,
+                googleUser = if (it.activeEngine == AiEngine.CLINE) user else it.googleUser,
+                clineApiKey = if (apiKeyOrToken.isNotBlank()) apiKeyOrToken.trim() else it.clineApiKey,
+                connectionStatus = "Đã đăng nhập Google (Cline)"
+            )
+        }
+    }
+
+    fun signOutCline() {
+        tokenStore.saveClineGoogleUser(null)
+        tokenStore.saveClineApiKey("")
+        _uiState.update {
+            it.copy(
+                clineUser = null,
+                clineApiKey = "",
+                googleUser = if (it.activeEngine == AiEngine.CLINE) null else it.googleUser,
+                connectionStatus = "Đã đăng xuất Google (Cline)"
+            )
+        }
+    }
+
+    fun handleAuthDeepLink(uri: Uri) {
+        val engine = uri.getQueryParameter("engine")?.lowercase()
+        val email = uri.getQueryParameter("email") ?: uri.getQueryParameter("user") ?: ""
+        val token = uri.getQueryParameter("token") ?: uri.getQueryParameter("key") ?: ""
+        val name = uri.getQueryParameter("name") ?: email.substringBefore("@")
+
+        if (engine == "cline") {
+            signInClineGoogle(email, name, token)
+        } else {
+            signInAntigravityGoogle(email, name, token)
+        }
+    }
+
+    fun signInWithGoogle(email: String, displayName: String, token: String?) =
+        signInAntigravityGoogle(email, displayName, token ?: "")
+
     fun signOutGoogle() {
-        tokenStore.saveGoogleUser(null)
-        _uiState.update { it.copy(googleUser = null) }
+        if (_uiState.value.activeEngine == AiEngine.CLINE) signOutCline() else signOutAntigravity()
     }
 
     fun saveEngineSettings(antigravityKey: String, clineKey: String, clineEndpoint: String) {

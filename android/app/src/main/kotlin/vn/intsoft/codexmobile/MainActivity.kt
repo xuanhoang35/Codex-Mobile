@@ -1,16 +1,19 @@
 package vn.intsoft.codexmobile
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.viewModels
 import vn.intsoft.codexmobile.ui.CodexApp
 import vn.intsoft.codexmobile.ui.CodexViewModel
 
 class MainActivity : ComponentActivity() {
+    private val viewModel: CodexViewModel by viewModels()
+
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
@@ -23,10 +26,22 @@ class MainActivity : ComponentActivity() {
                 notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             }
         } catch (_: Throwable) { }
+
+        handleIntent(intent)
+
         setContent {
-            val viewModel: CodexViewModel = viewModel()
             CodexApp(viewModel)
         }
     }
-}
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        intent?.data?.let { uri ->
+            viewModel.handleAuthDeepLink(uri)
+        }
+    }
+}

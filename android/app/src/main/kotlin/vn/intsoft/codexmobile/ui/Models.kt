@@ -58,6 +58,8 @@ data class CodexUiState(
     val endpoint: String = "wss://intsoft-codebank-vn.tailb240ce.ts.net:8443/",
     val workspace: String = "/srv/codex-workspaces",
     val activeEngine: AiEngine = AiEngine.CODEX,
+    val antigravityUser: GoogleUserProfile? = null,
+    val clineUser: GoogleUserProfile? = null,
     val googleUser: GoogleUserProfile? = null,
     val antigravityApiKey: String = "",
     val clineApiKey: String = "",

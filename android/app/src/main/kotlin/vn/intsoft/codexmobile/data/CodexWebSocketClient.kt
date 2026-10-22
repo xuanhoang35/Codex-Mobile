@@ -20,9 +20,9 @@ class CodexWebSocketClient(
     var workspace: String,
     val listener: Listener
 ) {
-    constructor(tokenProvider: () -> String?, listener: Listener) : this(
+    constructor(tokenProvider: () -> String, listener: Listener) : this(
         endpoint = "wss://intsoft-codebank-vn.tailb240ce.ts.net:8443/",
-        token = tokenProvider() ?: "",
+        token = tokenProvider(),
         workspace = "/srv/codex-workspaces",
         listener = listener
     )
