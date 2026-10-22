@@ -203,6 +203,11 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
         val clineEndpoint = tokenStore.getClineEndpoint()
 
         val models = multiEngineClient.getDefaultModelsForEngine(initialEngine)
+        val initialUsage = when (initialEngine) {
+            AiEngine.ANTIGRAVITY -> UsageSnapshot.createAntigravitySnapshot(antigravityUser?.email)
+            AiEngine.CLINE -> UsageSnapshot.createClineSnapshot(clineUser?.email)
+            AiEngine.CODEX -> null
+        }
 
         _uiState.update {
             it.copy(
@@ -215,6 +220,7 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 clineCustomEndpoint = clineEndpoint,
                 availableModels = models,
                 selectedModelId = initialEngine.defaultModel,
+                usage = initialUsage,
                 queuedTurns = queueStore.getAll().map { r -> QueuedTurn(r.id, r.text) },
                 snippets = snippetStore.getAll()
             )
@@ -227,6 +233,11 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     fun selectEngine(engine: AiEngine) {
         tokenStore.saveActiveEngine(engine)
         val models = multiEngineClient.getDefaultModelsForEngine(engine)
+        val engineUsage = when (engine) {
+            AiEngine.ANTIGRAVITY -> UsageSnapshot.createAntigravitySnapshot(_uiState.value.antigravityUser?.email)
+            AiEngine.CLINE -> UsageSnapshot.createClineSnapshot(_uiState.value.clineUser?.email)
+            AiEngine.CODEX -> _uiState.value.usage
+        }
         _uiState.update {
             val userForEngine = when (engine) {
                 AiEngine.CODEX -> null
@@ -238,12 +249,33 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 googleUser = userForEngine,
                 availableModels = models,
                 selectedModelId = engine.defaultModel,
+                usage = engineUsage,
                 connectionStatus = when (engine) {
                     AiEngine.CODEX -> if (it.isConnected) "Đã kết nối (Codex)" else "Mất kết nối server"
                     AiEngine.ANTIGRAVITY -> if (it.antigravityUser != null || it.antigravityApiKey.isNotBlank()) "Sẵn sàng (Antigravity Google)" else "Chưa đăng nhập Google"
                     AiEngine.CLINE -> if (it.clineUser != null || it.clineApiKey.isNotBlank()) "Sẵn sàng (Cline Agent)" else "Chưa đăng nhập Google"
                 }
             )
+        }
+    }
+
+    fun refreshUsage() {
+        when (_uiState.value.activeEngine) {
+            AiEngine.CODEX -> {
+                if (_uiState.value.isConnected) {
+                    webSocketClient.refreshUsage()
+                }
+            }
+            AiEngine.ANTIGRAVITY -> {
+                _uiState.update {
+                    it.copy(usage = UsageSnapshot.createAntigravitySnapshot(it.antigravityUser?.email))
+                }
+            }
+            AiEngine.CLINE -> {
+                _uiState.update {
+                    it.copy(usage = UsageSnapshot.createClineSnapshot(it.clineUser?.email))
+                }
+            }
         }
     }
 
@@ -420,6 +452,45 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
         val text = state.inputText.trim()
         if (text.isBlank() && state.attachments.isEmpty()) return
 
+        // ---------------------------------------------------------------------
+        // Authentication Guard (Giống ChatGPT: Bắt buộc đăng nhập trước khi chat)
+        // ---------------------------------------------------------------------
+        when (state.activeEngine) {
+            AiEngine.ANTIGRAVITY -> {
+                val isAuthed = state.antigravityUser != null || state.antigravityApiKey.isNotBlank()
+                if (!isAuthed) {
+                    _uiState.update {
+                        it.copy(
+                            lastErrorMessage = "Yêu cầu đăng nhập tài khoản Google (Gmail) để kích hoạt Antigravity trước khi trò chuyện."
+                        )
+                    }
+                    return
+                }
+            }
+            AiEngine.CLINE -> {
+                val isAuthed = state.clineUser != null || state.clineApiKey.isNotBlank()
+                if (!isAuthed) {
+                    _uiState.update {
+                        it.copy(
+                            lastErrorMessage = "Yêu cầu đăng nhập tài khoản Google (Gmail) hoặc cấu hình API Key để kích hoạt Cline trước khi trò chuyện."
+                        )
+                    }
+                    return
+                }
+            }
+            AiEngine.CODEX -> {
+                if (!state.isConnected && state.account == null) {
+                    _uiState.update {
+                        it.copy(
+                            lastErrorMessage = "Vui lòng kết nối tài khoản Codex Server trước khi gửi câu lệnh."
+                        )
+                    }
+                    connect()
+                    return
+                }
+            }
+        }
+
         val userMsg = ChatMessage(
             id = UUID.randomUUID().toString(),
             role = MessageRole.USER,
@@ -453,12 +524,13 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             AiEngine.ANTIGRAVITY -> {
-                // Google DeepMind / Gemini execution
+                // Google DeepMind / Gemini execution with autonomous permission mode
                 viewModelScope.launch {
                     multiEngineClient.streamAntigravity(
                         modelId = state.selectedModelId,
                         messages = state.messages,
                         newPrompt = text,
+                        permissionMode = state.permissionMode,
                         onChunk = { chunk ->
                             _uiState.update {
                                 it.copy(streamingResponse = it.streamingResponse + chunk)
@@ -492,12 +564,13 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             AiEngine.CLINE -> {
-                // Cline Universal Agent / Claude / DeepSeek
+                // Cline Universal Agent with autonomous permission mode
                 viewModelScope.launch {
                     multiEngineClient.streamCline(
                         modelId = state.selectedModelId,
                         messages = state.messages,
                         newPrompt = text,
+                        permissionMode = state.permissionMode,
                         onChunk = { chunk ->
                             _uiState.update {
                                 it.copy(streamingResponse = it.streamingResponse + chunk)
@@ -699,10 +772,6 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshAccount() {
         webSocketClient.refreshAccount()
-    }
-
-    fun refreshUsage() {
-        webSocketClient.refreshUsage()
     }
 
     fun toggleCompletionNotifications(enabled: Boolean) {

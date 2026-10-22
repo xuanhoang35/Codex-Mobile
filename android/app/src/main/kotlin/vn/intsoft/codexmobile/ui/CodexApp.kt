@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -189,7 +190,18 @@ fun CodexApp(viewModel: CodexViewModel) {
                     onEditQueueTurn = { id, text -> viewModel.editQueueTurn(id, text) },
                     onDeleteQueueTurn = { id -> viewModel.deleteQueueTurn(id) },
                     onClearQueue = { viewModel.clearQueue() },
-                    onOpenDrawer = { viewModel.toggleHistory() }
+                    onOpenDrawer = { viewModel.toggleHistory() },
+                    onOpenAntigravityLogin = {
+                        showAntigravityLoginDialog = true
+                        viewModel.openAntigravityBrowserLogin(context)
+                    },
+                    onOpenClineLogin = {
+                        showClineLoginDialog = true
+                        viewModel.openClineBrowserLogin(context)
+                    },
+                    onOpenCodexLogin = {
+                        viewModel.startAccountLogin()
+                    }
                 )
             }
         }
@@ -270,7 +282,26 @@ fun CodexApp(viewModel: CodexViewModel) {
             onSelectEffort = { effort ->
                 viewModel.selectEffort(effort)
             },
+            onViewUsage = {
+                showModelPicker = false
+                showUsageDialog = true
+            },
             onDismiss = { showModelPicker = false }
+        )
+    }
+
+    // Dialog: Usage
+    if (showUsageDialog) {
+        val activeUsage = state.usage ?: when (state.activeEngine) {
+            AiEngine.ANTIGRAVITY -> UsageSnapshot.createAntigravitySnapshot(state.antigravityUser?.email)
+            AiEngine.CLINE -> UsageSnapshot.createClineSnapshot(state.clineUser?.email)
+            AiEngine.CODEX -> UsageSnapshot(statusMessage = "Chưa kết nối Codex Server")
+        }
+        UsageDialog(
+            activeEngine = state.activeEngine,
+            usage = activeUsage,
+            onDismiss = { showUsageDialog = false },
+            onRefresh = { viewModel.refreshUsage() }
         )
     }
 
@@ -295,16 +326,7 @@ fun CodexApp(viewModel: CodexViewModel) {
         )
     }
 
-    // Dialog: Usage
-    if (showUsageDialog) {
-        state.usage?.let { usage ->
-            UsageDialog(
-                usage = usage,
-                onDismiss = { showUsageDialog = false },
-                onRefresh = { viewModel.refreshUsage() }
-            )
-        }
-    }
+
 
     // Dialog: Archive
     if (showArchiveDialog) {
@@ -402,7 +424,7 @@ fun EngineSelectorBar(
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = engine.icon, fontSize = 14.sp)
+                        EngineBrandIcon(engine = engine, size = 18.dp)
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = engine.title,
@@ -435,7 +457,7 @@ fun EngineSelectorBar(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("🪐", fontSize = 12.sp)
+                                AntigravityBrandIcon(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = user.email,
@@ -459,7 +481,11 @@ fun EngineSelectorBar(
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            Text("🌐 Đăng nhập Google (Gmail) cho Antigravity", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AntigravityBrandIcon(size = 16.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Đăng nhập Google (Gmail) cho Antigravity", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -476,7 +502,7 @@ fun EngineSelectorBar(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("🤖", fontSize = 12.sp)
+                                ClineBrandIcon(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = user.email,
@@ -500,7 +526,11 @@ fun EngineSelectorBar(
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            Text("🌐 Đăng nhập Google (Gmail) cho Cline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                ClineBrandIcon(size = 16.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Đăng nhập Google (Gmail) cho Cline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -517,7 +547,7 @@ fun EngineSelectorBar(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("⚡", fontSize = 12.sp)
+                                CodexBrandIcon(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = account.email,
@@ -541,7 +571,11 @@ fun EngineSelectorBar(
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(vertical = 6.dp)
                         ) {
-                            Text("🌐 Đăng nhập OpenAI / ChatGPT qua Trình duyệt", color = AppBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CodexBrandIcon(size = 16.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Đăng nhập OpenAI / ChatGPT qua Trình duyệt", color = AppBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -613,14 +647,30 @@ private fun AppTopBar(
             }
         },
         actions = {
-            if (!showSnippets && state.isInitialized && state.activeEngine == AiEngine.CODEX) {
-                state.usage?.primary?.let { usageWindow ->
+            if (!showSnippets) {
+                val usageWindow = state.usage?.primary
+                if (usageWindow != null) {
+                    val activeColor = when (state.activeEngine) {
+                        AiEngine.CODEX -> CodexGreen
+                        AiEngine.ANTIGRAVITY -> AntigravityPurple
+                        AiEngine.CLINE -> ClineOrange
+                    }
+                    TextButton(onClick = onUsage) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${(usageWindow.usedPercent).toInt()}%",
+                                color = activeColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else {
                     TextButton(onClick = onUsage) {
                         Text(
-                            text = "${(usageWindow.usedPercent).toInt()}%",
-                            color = CodexGreen,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
+                            text = "Usage",
+                            color = SecondaryText,
+                            fontSize = 12.sp
                         )
                     }
                 }
@@ -860,7 +910,10 @@ private fun ChatScreen(
     onEditQueueTurn: (String, String) -> Unit,
     onDeleteQueueTurn: (String) -> Unit,
     onClearQueue: () -> Unit,
-    onOpenDrawer: () -> Unit
+    onOpenDrawer: () -> Unit,
+    onOpenAntigravityLogin: () -> Unit = {},
+    onOpenClineLogin: () -> Unit = {},
+    onOpenCodexLogin: () -> Unit = {}
 ) {
     val listState = rememberLazyListState()
 
@@ -931,7 +984,10 @@ private fun ChatScreen(
             onPickImage = onPickImage,
             onTakePhoto = onTakePhoto,
             onRemoveImage = onRemoveImage,
-            onCancelExcerptReply = onCancelExcerptReply
+            onCancelExcerptReply = onCancelExcerptReply,
+            onOpenAntigravityLogin = onOpenAntigravityLogin,
+            onOpenClineLogin = onOpenClineLogin,
+            onOpenCodexLogin = onOpenCodexLogin
         )
     }
 }
@@ -970,8 +1026,12 @@ private fun ChatMessageItem(message: ChatMessage) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     // Role & Engine Header
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!isUser && !isSystem) {
+                            EngineBrandIcon(engine = message.engine, size = 14.dp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
                         Text(
-                            text = if (isUser) "Bạn" else if (isSystem) "Hệ thống" else "${message.engine.icon} ${message.engine.title}",
+                            text = if (isUser) "Bạn" else if (isSystem) "Hệ thống" else message.engine.title,
                             color = if (isUser) PrimaryText else engineTagColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -1242,8 +1302,17 @@ private fun Composer(
     onPickImage: () -> Unit,
     onTakePhoto: () -> Unit,
     onRemoveImage: (Int) -> Unit,
-    onCancelExcerptReply: () -> Unit
+    onCancelExcerptReply: () -> Unit,
+    onOpenAntigravityLogin: () -> Unit = {},
+    onOpenClineLogin: () -> Unit = {},
+    onOpenCodexLogin: () -> Unit = {}
 ) {
+    val isAuthed = when (state.activeEngine) {
+        AiEngine.ANTIGRAVITY -> state.antigravityUser != null || state.antigravityApiKey.isNotBlank()
+        AiEngine.CLINE -> state.clineUser != null || state.clineApiKey.isNotBlank()
+        AiEngine.CODEX -> state.isConnected || state.account != null
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1274,7 +1343,7 @@ private fun Composer(
             }
         }
 
-        // Chip Bar: Model, Effort, Permissions
+        // Chip Bar: Model, Effort, Permissions (Active for ALL engines)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1296,21 +1365,87 @@ private fun Composer(
                 border = BorderStroke(1.dp, BorderColor)
             )
 
-            // Permission Mode Chip (for Codex)
-            if (state.activeEngine == AiEngine.CODEX) {
-                AssistChip(
-                    onClick = onPermissionClick,
-                    label = {
-                        val modeColor = when (state.permissionMode) {
-                            PermissionMode.ASK -> WarningYellow
-                            PermissionMode.AUTO -> CodexGreen
-                            PermissionMode.FULL -> DangerRed
+            // Permission Mode Chip (Active for Codex, Antigravity, and Cline)
+            AssistChip(
+                onClick = onPermissionClick,
+                leadingIcon = {
+                    val iconText = when (state.permissionMode) {
+                        PermissionMode.ASK -> "🛡️"
+                        PermissionMode.AUTO -> "⚡"
+                        PermissionMode.FULL -> "🔥"
+                    }
+                    Text(iconText, fontSize = 12.sp)
+                },
+                label = {
+                    val modeColor = when (state.permissionMode) {
+                        PermissionMode.ASK -> WarningYellow
+                        PermissionMode.AUTO -> CodexGreen
+                        PermissionMode.FULL -> DangerRed
+                    }
+                    val modeTitle = when (state.permissionMode) {
+                        PermissionMode.ASK -> "ASK"
+                        PermissionMode.AUTO -> "AUTO"
+                        PermissionMode.FULL -> "FULL (YOLO)"
+                    }
+                    Text(text = modeTitle, fontSize = 11.sp, color = modeColor, fontWeight = FontWeight.Bold)
+                },
+                colors = AssistChipDefaults.assistChipColors(containerColor = InputBackground),
+                border = BorderStroke(1.dp, BorderColor)
+            )
+        }
+
+        // Authentication Required Banner (Giống ChatGPT: Bắt buộc đăng nhập trước khi chat)
+        if (!isAuthed) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+                    .clickable {
+                        when (state.activeEngine) {
+                            AiEngine.ANTIGRAVITY -> onOpenAntigravityLogin()
+                            AiEngine.CLINE -> onOpenClineLogin()
+                            AiEngine.CODEX -> onOpenCodexLogin()
                         }
-                        Text(text = state.permissionMode.name, fontSize = 11.sp, color = modeColor, fontWeight = FontWeight.Bold)
                     },
-                    colors = AssistChipDefaults.assistChipColors(containerColor = InputBackground),
-                    border = BorderStroke(1.dp, BorderColor)
-                )
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = WarningYellow.copy(alpha = 0.15f)),
+                border = BorderStroke(1.dp, WarningYellow.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🔒", fontSize = 15.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Yêu cầu đăng nhập để bắt đầu trò chuyện",
+                            color = PrimaryText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = when (state.activeEngine) {
+                                AiEngine.ANTIGRAVITY -> "Ấn vào đây để đăng nhập Google (Gmail) cho Antigravity"
+                                AiEngine.CLINE -> "Ấn vào đây để đăng nhập Google (Gmail) cho Cline"
+                                AiEngine.CODEX -> "Ấn vào đây để kết nối tài khoản Codex Server"
+                            },
+                            color = SecondaryText,
+                            fontSize = 11.sp
+                        )
+                    }
+                    TextButton(
+                        onClick = {
+                            when (state.activeEngine) {
+                                AiEngine.ANTIGRAVITY -> onOpenAntigravityLogin()
+                                AiEngine.CLINE -> onOpenClineLogin()
+                                AiEngine.CODEX -> onOpenCodexLogin()
+                            }
+                        }
+                    ) {
+                        Text("Đăng nhập", color = WarningYellow, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
@@ -1331,8 +1466,8 @@ private fun Composer(
                 placeholder = {
                     val hint = when (state.activeEngine) {
                         AiEngine.CODEX -> "Hỏi Codex hoặc nhập lệnh..."
-                        AiEngine.ANTIGRAVITY -> "Hỏi Antigravity (Gemini 2.5)..."
-                        AiEngine.CLINE -> "Yêu cầu Cline (Claude 3.7)..."
+                        AiEngine.ANTIGRAVITY -> "Hỏi Antigravity (Gemini 3.8)..."
+                        AiEngine.CLINE -> "Yêu cầu Cline (DeepSeek / Claude)..."
                     }
                     Text(hint, color = SecondaryText, fontSize = 14.sp)
                 },
@@ -1359,14 +1494,24 @@ private fun Composer(
                 }
             } else {
                 Button(
-                    onClick = onSend,
-                    enabled = state.inputText.isNotBlank() || state.attachments.isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = sendColor),
+                    onClick = {
+                        if (!isAuthed) {
+                            when (state.activeEngine) {
+                                AiEngine.ANTIGRAVITY -> onOpenAntigravityLogin()
+                                AiEngine.CLINE -> onOpenClineLogin()
+                                AiEngine.CODEX -> onOpenCodexLogin()
+                            }
+                        } else {
+                            onSend()
+                        }
+                    },
+                    enabled = !isAuthed || state.inputText.isNotBlank() || state.attachments.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (!isAuthed) WarningYellow else sendColor),
                     shape = CircleShape,
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.size(42.dp)
                 ) {
-                    Text("➔", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(if (!isAuthed) "🔒" else "➔", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1381,15 +1526,71 @@ private fun ModelPickerDialog(
     activeEngine: AiEngine,
     onSelectModel: (String) -> Unit,
     onSelectEffort: (String) -> Unit,
+    onViewUsage: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var filterCategory by remember { mutableStateOf("ALL") }
+
+    val displayedModels = remember(models, filterCategory) {
+        when (filterCategory) {
+            "FREE" -> models.filter { it.isFree }
+            "PRO" -> models.filter { !it.isFree }
+            else -> models
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chọn Model (${activeEngine.title})", color = PrimaryText, fontWeight = FontWeight.Bold) },
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                EngineBrandIcon(engine = activeEngine, size = 20.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Model (${activeEngine.title})", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(models, key = { it.id }) { model ->
+                // Category Filter Tabs for Cline
+                if (activeEngine == AiEngine.CLINE) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = filterCategory == "ALL",
+                                onClick = { filterCategory = "ALL" },
+                                label = { Text("Tất cả", fontSize = 11.sp) }
+                            )
+                            FilterChip(
+                                selected = filterCategory == "FREE",
+                                onClick = { filterCategory = "FREE" },
+                                label = {
+                                    Text(
+                                        "🟢 Free (${models.count { it.isFree }})",
+                                        color = Color(0xFF22C55E),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            )
+                            FilterChip(
+                                selected = filterCategory == "PRO",
+                                onClick = { filterCategory = "PRO" },
+                                label = { Text("⚡ Pro (${models.count { !it.isFree }})", fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                }
+
+                items(displayedModels, key = { it.id }) { model ->
                     val isSelected = model.id == selectedModelId
+                    val isAvailable = model.isAvailable
                     val brandColor = when (activeEngine) {
                         AiEngine.CODEX -> CodexGreen
                         AiEngine.ANTIGRAVITY -> AntigravityPurple
@@ -1399,22 +1600,65 @@ private fun ModelPickerDialog(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSelectModel(model.id) },
+                            .clickable(enabled = isAvailable) { onSelectModel(model.id) },
                         shape = RoundedCornerShape(8.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = if (isSelected) brandColor.copy(alpha = 0.2f) else InputBackground
                         ),
                         border = if (isSelected) BorderStroke(1.dp, brandColor) else null
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = model.name.ifBlank { model.id },
-                                color = PrimaryText,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 14.sp
-                            )
-                            if (model.description.isNotBlank()) {
-                                Text(text = model.description, color = SecondaryText, fontSize = 11.sp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .then(if (!isAvailable) Modifier.alpha(0.45f) else Modifier)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = model.name.ifBlank { model.id },
+                                        color = PrimaryText,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 13.sp
+                                    )
+                                    model.badge?.let { badge ->
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        val (badgeBg, badgeFg) = when (badge) {
+                                            "FREE" -> Pair(Color(0xFF22C55E).copy(alpha = 0.2f), Color(0xFF22C55E))
+                                            "High" -> Pair(Color(0xFF64748B).copy(alpha = 0.2f), Color(0xFF94A3B8))
+                                            "Notice" -> Pair(Color(0xFF38BDF8).copy(alpha = 0.2f), Color(0xFF38BDF8))
+                                            "Unavailable" -> Pair(DangerRed.copy(alpha = 0.2f), DangerRed)
+                                            "PRO" -> Pair(ClineOrange.copy(alpha = 0.2f), ClineOrange)
+                                            else -> Pair(InputBackground, SecondaryText)
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(badgeBg)
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        ) {
+                                            Text(
+                                                text = if (badge == "Notice" || badge == "Unavailable") "$badge ⓘ" else badge,
+                                                color = badgeFg,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                                if (model.description.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(text = model.description, color = SecondaryText, fontSize = 11.sp)
+                                }
+                            }
+
+                            if (isSelected) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("✓", color = brandColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1445,6 +1689,36 @@ private fun ModelPickerDialog(
                                 }
                             }
                         }
+                    }
+                }
+
+                // View Usage Button (matching the Antigravity / IDE Model Selector screenshot!)
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = BorderColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable {
+                                onDismiss()
+                                onViewUsage()
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📈", fontSize = 15.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "View Usage",
+                                color = PrimaryText,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Text("›", color = SecondaryText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1499,8 +1773,8 @@ private fun PermissionPickerDialog(
                             Text(
                                 text = when (mode) {
                                     PermissionMode.ASK -> "Hỏi xác nhận trước mọi hành động can thiệp file/hệ thống"
-                                    PermissionMode.AUTO -> "Tự động cho phép thao tác an toàn (đọc file, tìm kiếm)"
-                                    PermissionMode.FULL -> "Toàn quyền thực thi lệnh tự động không cần hỏi"
+                                    PermissionMode.AUTO -> "Tự động cho phép thao tác an toàn (đọc file, tìm kiếm, phân tích)"
+                                    PermissionMode.FULL -> "Toàn quyền tự hành mạnh mẽ (FULL / YOLO) - Tự động viết code hoàn chỉnh, sửa file và giải quyết bài toán xuyên suốt không cần dừng lại xin xác nhận"
                                 },
                                 color = SecondaryText,
                                 fontSize = 12.sp
@@ -2070,10 +2344,17 @@ private fun ActivityLogDialog(
 
 @Composable
 private fun UsageDialog(
+    activeEngine: AiEngine,
     usage: UsageSnapshot,
     onDismiss: () -> Unit,
     onRefresh: () -> Unit
 ) {
+    val brandColor = when (activeEngine) {
+        AiEngine.CODEX -> CodexGreen
+        AiEngine.ANTIGRAVITY -> AntigravityPurple
+        AiEngine.CLINE -> ClineOrange
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -2082,9 +2363,13 @@ private fun UsageDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Hạn ngạch & Sử dụng", color = PrimaryText, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    EngineBrandIcon(engine = activeEngine, size = 22.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Hạn ngạch & Thời gian", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
                 TextButton(onClick = onRefresh) {
-                    Text("Làm mới", color = CodexGreen, fontSize = 12.sp)
+                    Text("Làm mới", color = brandColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         },
@@ -2093,8 +2378,71 @@ private fun UsageDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                usage.primary?.let { UsageWindowCard(title = "Cửa sổ ngắn hạn (5 giờ)", window = it) }
-                usage.secondary?.let { UsageWindowCard(title = "Cửa sổ dài hạn (7 ngày)", window = it) }
+                // Plan & Account card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = InputBackground)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = usage.planType ?: "${activeEngine.title} Standard Tier",
+                            color = brandColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        usage.creditBalance?.let {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(it, color = SecondaryText, fontSize = 11.sp)
+                        }
+                        usage.resetCountdownText?.let {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "⏳ $it",
+                                color = PrimaryText,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                // Primary window card
+                usage.primary?.let {
+                    val defaultTitle = when (activeEngine) {
+                        AiEngine.CODEX -> "Cửa sổ ngắn hạn (5 giờ)"
+                        AiEngine.ANTIGRAVITY -> "Hạn mức Token Tuần (Google DeepMind)"
+                        AiEngine.CLINE -> "Lượt gọi Free Models Hôm nay (OpenRouter)"
+                    }
+                    UsageWindowCard(
+                        title = it.label ?: defaultTitle,
+                        window = it,
+                        brandColor = brandColor
+                    )
+                }
+
+                // Secondary window card
+                usage.secondary?.let {
+                    val defaultTitle = when (activeEngine) {
+                        AiEngine.CODEX -> "Cửa sổ dài hạn (7 ngày)"
+                        AiEngine.ANTIGRAVITY -> "Hạn ngạch Yêu cầu Ngày"
+                        AiEngine.CLINE -> "Hạn mức Định mức Tuần"
+                    }
+                    UsageWindowCard(
+                        title = it.label ?: defaultTitle,
+                        window = it,
+                        brandColor = brandColor
+                    )
+                }
+
+                // Extra details
+                usage.statusMessage.takeIf { it.isNotBlank() }?.let { msg ->
+                    Text(
+                        text = "• $msg",
+                        color = SecondaryText,
+                        fontSize = 11.sp
+                    )
+                }
             }
         },
         confirmButton = {
@@ -2107,27 +2455,48 @@ private fun UsageDialog(
 }
 
 @Composable
-private fun UsageWindowCard(title: String, window: UsageWindow) {
+private fun UsageWindowCard(
+    title: String,
+    window: UsageWindow,
+    brandColor: Color = CodexGreen
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = InputBackground),
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(title, color = SecondaryText, fontSize = 12.sp)
-            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, color = SecondaryText, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    text = "Còn ${window.remainingPercent}%",
+                    color = if (window.usedPercent > 85) DangerRed else brandColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
             LinearProgressIndicator(
                 progress = { (window.usedPercent / 100f).coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                color = if (window.usedPercent > 85) DangerRed else CodexGreen,
+                color = if (window.usedPercent > 85) DangerRed else brandColor,
                 trackColor = BorderColor
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Đã dùng: ${(window.usedPercent).toInt()}%", color = PrimaryText, fontSize = 11.sp)
                 window.resetsInHours?.let {
-                    Text("Làm mới sau: ${it}h", color = SecondaryText, fontSize = 11.sp)
+                    val timeText = if (it >= 24) "${it / 24} ngày ${it % 24}h" else "${it}h"
+                    Text("Làm mới sau: $timeText", color = SecondaryText, fontSize = 11.sp)
                 }
+            }
+            window.detail?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, color = SecondaryText.copy(alpha = 0.85f), fontSize = 10.sp)
             }
         }
     }
