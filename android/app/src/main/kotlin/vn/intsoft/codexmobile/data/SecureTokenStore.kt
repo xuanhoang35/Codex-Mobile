@@ -8,9 +8,8 @@ import org.json.JSONObject
 
 class SecureTokenStore(context: Context) {
 
-    private val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-
     private val prefs: SharedPreferences = try {
+        val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
         EncryptedSharedPreferences.create(
             "codex_secure_tokens",
             masterKeyAlias,
@@ -18,7 +17,7 @@ class SecureTokenStore(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    } catch (e: Exception) {
+    } catch (_: Throwable) {
         context.getSharedPreferences("codex_fallback_tokens", Context.MODE_PRIVATE)
     }
 

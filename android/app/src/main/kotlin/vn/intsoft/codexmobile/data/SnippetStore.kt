@@ -1,31 +1,17 @@
 package vn.intsoft.codexmobile.data
 
 import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.util.Base64
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
+import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
 class SnippetStore(context: Context) {
-    private val preferences = context.getSharedPreferences("codex_mobile_snippets", Context.MODE_PRIVATE)
-    private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    private val preferences: SharedPreferences = context.getSharedPreferences("codex_mobile_snippets", Context.MODE_PRIVATE)
 
     fun load(): List<SnippetEntry> {
         return try {
-            val ivStr = preferences.getString("snippets_iv", null) ?: return emptyList()
-            val cipherText = preferences.getString("snippets_ciphertext", null) ?: return emptyList()
-            val key = keyStore.getKey("codex_mobile_snippet_key", null) as? SecretKey ?: return emptyList()
-
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, Base64.decode(ivStr, Base64.NO_WRAP)))
-            val decrypted = cipher.doFinal(Base64.decode(cipherText, Base64.NO_WRAP))
-            val jsonArray = JSONArray(String(decrypted, Charsets.UTF_8))
+            val dataStr = preferences.getString("snippets_data", null) ?: return emptyList()
+            val jsonArray = JSONArray(dataStr)
 
             val result = mutableListOf<SnippetEntry>()
             for (i in 0 until jsonArray.length()) {
@@ -49,27 +35,21 @@ class SnippetStore(context: Context) {
     }
 
     fun save(entries: List<SnippetEntry>) {
-        val key = getOrCreateKey()
-        val array = JSONArray()
-        for (item in entries) {
-            val obj = JSONObject()
-                .put("id", item.id)
-                .put("parentId", item.parentId ?: "")
-                .put("kind", item.kind.name)
-                .put("title", item.title)
-                .put("content", item.content)
-                .put("updatedAt", item.updatedAt)
-            array.put(obj)
+        try {
+            val array = JSONArray()
+            for (item in entries) {
+                val obj = JSONObject()
+                    .put("id", item.id)
+                    .put("parentId", item.parentId ?: "")
+                    .put("kind", item.kind.name)
+                    .put("title", item.title)
+                    .put("content", item.content)
+                    .put("updatedAt", item.updatedAt)
+                array.put(obj)
+            }
+            preferences.edit().putString("snippets_data", array.toString()).apply()
+        } catch (_: Throwable) {
         }
-
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key)
-        val encrypted = cipher.doFinal(array.toString().toByteArray(Charsets.UTF_8))
-
-        preferences.edit()
-            .putString("snippets_iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .putString("snippets_ciphertext", Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .apply()
     }
 
     fun getAll(): List<SnippetEntry> = load()
@@ -87,10 +67,10 @@ class SnippetStore(context: Context) {
         return entry
     }
 
-    fun createSnippet(parentId: String?, title: String, content: String): SnippetEntry {
+    fun createSnippet(groupId: String?, title: String, content: String): SnippetEntry {
         val entry = SnippetEntry(
             id = java.util.UUID.randomUUID().toString(),
-            parentId = parentId,
+            parentId = groupId,
             kind = SnippetKind.SNIPPET,
             title = title,
             content = content
@@ -122,23 +102,5 @@ class SnippetStore(context: Context) {
             }
         }
         save(all.filterNot { it.id in idsToDelete })
-    }
-
-    private fun getOrCreateKey(): SecretKey {
-        val existing = keyStore.getKey("codex_mobile_snippet_key", null) as? SecretKey
-        if (existing != null) return existing
-
-        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        keyGenerator.init(
-            KeyGenParameterSpec.Builder(
-                "codex_mobile_snippet_key",
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-            )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .build()
-        )
-        return keyGenerator.generateKey()
     }
 }

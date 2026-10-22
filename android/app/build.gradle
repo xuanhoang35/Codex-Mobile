@@ -81,7 +81,4 @@ dependencies {
 
     // WorkManager
     implementation 'androidx.work:work-runtime-ktx:2.10.0'
-
-    // JSON
-    implementation 'org.json:json:20240303'
 }

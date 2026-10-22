@@ -91,16 +91,20 @@ class CodexWebSocketClient(
         manualDisconnect = false
         if (webSocket != null) return
 
-        if (reconnectExecutor.isShutdown) {
-            reconnectExecutor = Executors.newSingleThreadScheduledExecutor()
-        }
+        try {
+            if (reconnectExecutor.isShutdown) {
+                reconnectExecutor = Executors.newSingleThreadScheduledExecutor()
+            }
 
-        listener.onConnectionChanged("Đang kết nối…", false)
-        val request = Request.Builder()
-            .url(endpoint)
-            .header("Authorization", "Bearer $token")
-            .build()
-        webSocket = httpClient.newWebSocket(request, SocketListener())
+            listener.onConnectionChanged("Đang kết nối…", false)
+            val requestBuilder = Request.Builder().url(endpoint)
+            if (token.isNotBlank()) {
+                requestBuilder.header("Authorization", "Bearer $token")
+            }
+            webSocket = httpClient.newWebSocket(requestBuilder.build(), SocketListener())
+        } catch (t: Throwable) {
+            listener.onConnectionChanged("Chưa kết nối server", false)
+        }
     }
 
     fun connect(newEndpoint: String? = null, newWorkspace: String? = null) {

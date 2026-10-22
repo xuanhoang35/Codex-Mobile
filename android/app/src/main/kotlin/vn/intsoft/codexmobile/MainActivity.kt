@@ -18,9 +18,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != 0) {
-            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-        }
+        try {
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != 0) {
+                notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } catch (_: Throwable) { }
         setContent {
             val viewModel: CodexViewModel = viewModel()
             CodexApp(viewModel)
