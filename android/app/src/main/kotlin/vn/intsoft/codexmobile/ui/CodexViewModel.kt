@@ -251,9 +251,13 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 selectedModelId = engine.defaultModel,
                 usage = engineUsage,
                 connectionStatus = when (engine) {
-                    AiEngine.CODEX -> if (it.isConnected) "Đã kết nối (Codex)" else "Mất kết nối server"
-                    AiEngine.ANTIGRAVITY -> if (it.antigravityUser != null || it.antigravityApiKey.isNotBlank()) "Sẵn sàng (Antigravity Google)" else "Chưa đăng nhập Google"
-                    AiEngine.CLINE -> if (it.clineUser != null || it.clineApiKey.isNotBlank()) "Sẵn sàng (Cline Agent)" else "Chưa đăng nhập Google"
+                    AiEngine.CODEX -> when {
+                        !it.isConnected -> "Mất kết nối tới server"
+                        it.account == null -> "Chưa đăng nhập"
+                        else -> "Sẵn sàng"
+                    }
+                    AiEngine.ANTIGRAVITY -> if (it.antigravityUser != null || it.antigravityApiKey.isNotBlank()) "Sẵn sàng" else "Chưa đăng nhập"
+                    AiEngine.CLINE -> if (it.clineUser != null || it.clineApiKey.isNotBlank()) "Sẵn sàng" else "Chưa đăng nhập"
                 }
             )
         }

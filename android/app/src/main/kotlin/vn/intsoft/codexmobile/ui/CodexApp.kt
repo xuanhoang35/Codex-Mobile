@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -168,12 +169,6 @@ fun CodexApp(viewModel: CodexViewModel) {
                     onOpenArchive = { showArchiveDialog = true },
                     onActionClick = { thread -> threadActionTarget = thread }
                 )
-            } else if (state.activeEngine == AiEngine.CODEX && !state.isConnected && state.messages.isEmpty() && !state.isInitialized) {
-                ConnectScreen(
-                    state = state,
-                    onConnect = { viewModel.connect() },
-                    onOpenSettings = { showSettings = true }
-                )
             } else {
                 ChatScreen(
                     state = state,
@@ -201,6 +196,9 @@ fun CodexApp(viewModel: CodexViewModel) {
                     },
                     onOpenCodexLogin = {
                         viewModel.startAccountLogin()
+                    },
+                    onConnectCodex = {
+                        viewModel.connect()
                     }
                 )
             }
@@ -614,14 +612,25 @@ private fun AppTopBar(
                 )
                 if (!showSnippets && !state.showHistory) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val (statusDot, statusText) = when (state.activeEngine) {
-                            AiEngine.CODEX -> Pair(
-                                if (state.isConnected) CodexGreen else WarningYellow,
-                                if (state.isConnected) "Codex Server" else "Mất kết nối server"
-                            )
-                            AiEngine.ANTIGRAVITY -> Pair(AntigravityPurple, "Antigravity (Google Gemini)")
-                            AiEngine.CLINE -> Pair(ClineOrange, "Cline (Universal Agent)")
+                        val (statusDot, statusText, statusTextColor) = when (state.activeEngine) {
+                            AiEngine.CODEX -> when {
+                                !state.isConnected -> Triple(DangerRed, "Mất kết nối tới server", DangerRed)
+                                state.account == null -> Triple(WarningYellow, "Chưa đăng nhập", WarningYellow)
+                                else -> Triple(CodexGreen, "Sẵn sàng", CodexGreen)
+                            }
+                            AiEngine.ANTIGRAVITY -> {
+                                val authed = state.antigravityUser != null || state.antigravityApiKey.isNotBlank()
+                                if (authed) Triple(CodexGreen, "Sẵn sàng", CodexGreen)
+                                else Triple(WarningYellow, "Chưa đăng nhập Google", WarningYellow)
+                            }
+                            AiEngine.CLINE -> {
+                                val authed = state.clineUser != null || state.clineApiKey.isNotBlank()
+                                if (authed) Triple(CodexGreen, "Sẵn sàng", CodexGreen)
+                                else Triple(WarningYellow, "Chưa đăng nhập Google", WarningYellow)
+                            }
                         }
+
+                        val isOk = statusText == "Sẵn sàng"
 
                         Box(
                             modifier = Modifier
@@ -632,8 +641,9 @@ private fun AppTopBar(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = statusText,
-                            color = SecondaryText,
-                            style = MaterialTheme.typography.labelSmall
+                            color = statusTextColor,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isOk) FontWeight.Bold else FontWeight.Medium
                         )
                     }
                 }
@@ -913,9 +923,17 @@ private fun ChatScreen(
     onOpenDrawer: () -> Unit,
     onOpenAntigravityLogin: () -> Unit = {},
     onOpenClineLogin: () -> Unit = {},
-    onOpenCodexLogin: () -> Unit = {}
+    onOpenCodexLogin: () -> Unit = {},
+    onConnectCodex: () -> Unit = {}
 ) {
     val listState = rememberLazyListState()
+
+    val isCodexDisconnected = state.activeEngine == AiEngine.CODEX && !state.isConnected
+    val isAuthed = when (state.activeEngine) {
+        AiEngine.ANTIGRAVITY -> state.antigravityUser != null || state.antigravityApiKey.isNotBlank()
+        AiEngine.CLINE -> state.clineUser != null || state.clineApiKey.isNotBlank()
+        AiEngine.CODEX -> state.isConnected && state.account != null
+    }
 
     LaunchedEffect(state.messages.size, state.streamingResponse) {
         if (state.messages.isNotEmpty()) {
@@ -924,32 +942,200 @@ private fun ChatScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Messages LazyColumn
+        // Main Viewport (Messages or Centered "Vui lòng đăng nhập")
         Box(modifier = Modifier.weight(1f)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(vertical = 12.dp)
-            ) {
-                items(state.messages, key = { it.id }) { msg ->
-                    ChatMessageItem(message = msg)
-                }
+            if (state.messages.isEmpty()) {
+                if (!isAuthed) {
+                    // Viết vào giữa màn hình là vui lòng đăng nhập, tránh ảnh hưởng tới đoạn đang chat
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(0.92f),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = InputBackground),
+                            border = BorderStroke(1.dp, if (isCodexDisconnected) DangerRed.copy(alpha = 0.5f) else BorderColor)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                EngineBrandIcon(engine = state.activeEngine, size = 56.dp)
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                // Streaming indicator / response
-                if (state.isResponding && state.streamingResponse.isNotBlank()) {
-                    item {
-                        ChatMessageItem(
-                            message = ChatMessage(
-                                id = "streaming_current",
-                                role = MessageRole.ASSISTANT,
-                                content = state.streamingResponse,
-                                isStreaming = true,
-                                engine = state.activeEngine
+                                val titleText = if (isCodexDisconnected) "Mất kết nối tới server" else "Vui lòng đăng nhập"
+                                Text(
+                                    text = titleText,
+                                    color = if (isCodexDisconnected) DangerRed else PrimaryText,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 20.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                val subtitleText = when (state.activeEngine) {
+                                    AiEngine.CODEX -> if (isCodexDisconnected)
+                                        "Không thể kết nối đến máy chủ Codex. Vui lòng kiểm tra lại mạng Tailscale và thử kết nối lại."
+                                    else
+                                        "Vui lòng đăng nhập tài khoản OpenAI / ChatGPT để bắt đầu sử dụng Codex."
+                                    AiEngine.ANTIGRAVITY -> "Vui lòng đăng nhập tài khoản Google (Gmail) để kích hoạt Antigravity và sử dụng tất cả mô hình AI."
+                                    AiEngine.CLINE -> "Vui lòng đăng nhập tài khoản Google (Gmail) hoặc cấu hình API Key để kích hoạt Cline Universal Agent."
+                                }
+                                Text(
+                                    text = subtitleText,
+                                    color = SecondaryText,
+                                    fontSize = 13.sp,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 18.sp
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                val (buttonText, buttonColor, buttonAction) = when (state.activeEngine) {
+                                    AiEngine.CODEX -> if (isCodexDisconnected) {
+                                        Triple("⚡ Thử kết nối lại máy chủ", CodexGreen, onConnectCodex)
+                                    } else {
+                                        Triple("🌐 Đăng nhập OpenAI / ChatGPT", CodexGreen, onOpenCodexLogin)
+                                    }
+                                    AiEngine.ANTIGRAVITY -> Triple("🌐 Đăng nhập bằng Google (Gmail)", AntigravityPurple, onOpenAntigravityLogin)
+                                    AiEngine.CLINE -> Triple("🌐 Đăng nhập bằng Google (Gmail)", ClineOrange, onOpenClineLogin)
+                                }
+
+                                Button(
+                                    onClick = buttonAction,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+                                    contentPadding = PaddingValues(vertical = 12.dp)
+                                ) {
+                                    Text(
+                                        text = buttonText,
+                                        color = if (buttonColor == CodexGreen) AppBackground else Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            EngineBrandIcon(engine = state.activeEngine, size = 48.dp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Bắt đầu cuộc trò chuyện mới",
+                                color = PrimaryText,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
                             )
-                        )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Nhập câu hỏi hoặc câu lệnh ở khung bên dưới",
+                                color = SecondaryText,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    items(state.messages, key = { it.id }) { msg ->
+                        ChatMessageItem(message = msg)
+                    }
+
+                    // Streaming indicator / response
+                    if (state.isResponding && state.streamingResponse.isNotBlank()) {
+                        item {
+                            ChatMessageItem(
+                                message = ChatMessage(
+                                    id = "streaming_current",
+                                    role = MessageRole.ASSISTANT,
+                                    content = state.streamingResponse,
+                                    isStreaming = true,
+                                    engine = state.activeEngine
+                                )
+                            )
+                        }
+                    }
+
+                    // In-stream warning if unauthenticated during active chat
+                    if (!isAuthed) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = InputBackground),
+                                border = BorderStroke(1.dp, if (isCodexDisconnected) DangerRed.copy(alpha = 0.5f) else BorderColor)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    val titleNotice = if (isCodexDisconnected) "⚠️ Mất kết nối tới server" else "🔒 Vui lòng đăng nhập"
+                                    Text(
+                                        text = titleNotice,
+                                        color = if (isCodexDisconnected) DangerRed else WarningYellow,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val subNotice = if (isCodexDisconnected)
+                                        "Mất kết nối với máy chủ Codex. Vui lòng kết nối lại để tiếp tục trò chuyện."
+                                    else
+                                        "Vui lòng đăng nhập để tiếp tục gửi câu lệnh vào cuộc trò chuyện này."
+                                    Text(
+                                        text = subNotice,
+                                        color = SecondaryText,
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    val (btnText, btnColor, btnAction) = when (state.activeEngine) {
+                                        AiEngine.CODEX -> if (isCodexDisconnected) {
+                                            Triple("⚡ Thử kết nối lại", CodexGreen, onConnectCodex)
+                                        } else {
+                                            Triple("🌐 Đăng nhập OpenAI / ChatGPT", CodexGreen, onOpenCodexLogin)
+                                        }
+                                        AiEngine.ANTIGRAVITY -> Triple("🌐 Đăng nhập bằng Google (Gmail)", AntigravityPurple, onOpenAntigravityLogin)
+                                        AiEngine.CLINE -> Triple("🌐 Đăng nhập bằng Google (Gmail)", ClineOrange, onOpenClineLogin)
+                                    }
+                                    Button(
+                                        onClick = btnAction,
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = btnColor),
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = btnText,
+                                            color = if (btnColor == CodexGreen) AppBackground else Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -987,7 +1173,8 @@ private fun ChatScreen(
             onCancelExcerptReply = onCancelExcerptReply,
             onOpenAntigravityLogin = onOpenAntigravityLogin,
             onOpenClineLogin = onOpenClineLogin,
-            onOpenCodexLogin = onOpenCodexLogin
+            onOpenCodexLogin = onOpenCodexLogin,
+            onConnectCodex = onConnectCodex
         )
     }
 }
@@ -1305,12 +1492,14 @@ private fun Composer(
     onCancelExcerptReply: () -> Unit,
     onOpenAntigravityLogin: () -> Unit = {},
     onOpenClineLogin: () -> Unit = {},
-    onOpenCodexLogin: () -> Unit = {}
+    onOpenCodexLogin: () -> Unit = {},
+    onConnectCodex: () -> Unit = {}
 ) {
+    val isCodexDisconnected = state.activeEngine == AiEngine.CODEX && !state.isConnected
     val isAuthed = when (state.activeEngine) {
         AiEngine.ANTIGRAVITY -> state.antigravityUser != null || state.antigravityApiKey.isNotBlank()
         AiEngine.CLINE -> state.clineUser != null || state.clineApiKey.isNotBlank()
-        AiEngine.CODEX -> state.isConnected || state.account != null
+        AiEngine.CODEX -> state.isConnected && state.account != null
     }
 
     Column(
@@ -1394,62 +1583,7 @@ private fun Composer(
             )
         }
 
-        // Authentication Required Banner (Giống ChatGPT: Bắt buộc đăng nhập trước khi chat)
-        if (!isAuthed) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp)
-                    .clickable {
-                        when (state.activeEngine) {
-                            AiEngine.ANTIGRAVITY -> onOpenAntigravityLogin()
-                            AiEngine.CLINE -> onOpenClineLogin()
-                            AiEngine.CODEX -> onOpenCodexLogin()
-                        }
-                    },
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = WarningYellow.copy(alpha = 0.15f)),
-                border = BorderStroke(1.dp, WarningYellow.copy(alpha = 0.5f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("🔒", fontSize = 15.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Yêu cầu đăng nhập để bắt đầu trò chuyện",
-                            color = PrimaryText,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = when (state.activeEngine) {
-                                AiEngine.ANTIGRAVITY -> "Ấn vào đây để đăng nhập Google (Gmail) cho Antigravity"
-                                AiEngine.CLINE -> "Ấn vào đây để đăng nhập Google (Gmail) cho Cline"
-                                AiEngine.CODEX -> "Ấn vào đây để kết nối tài khoản Codex Server"
-                            },
-                            color = SecondaryText,
-                            fontSize = 11.sp
-                        )
-                    }
-                    TextButton(
-                        onClick = {
-                            when (state.activeEngine) {
-                                AiEngine.ANTIGRAVITY -> onOpenAntigravityLogin()
-                                AiEngine.CLINE -> onOpenClineLogin()
-                                AiEngine.CODEX -> onOpenCodexLogin()
-                            }
-                        }
-                    ) {
-                        Text("Đăng nhập", color = WarningYellow, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Input & Actions
+        // Input & Actions (CLEAN - No intrusive yellow banner card!)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1464,10 +1598,13 @@ private fun Composer(
                 onValueChange = onInputChanged,
                 modifier = Modifier.weight(1f),
                 placeholder = {
-                    val hint = when (state.activeEngine) {
-                        AiEngine.CODEX -> "Hỏi Codex hoặc nhập lệnh..."
-                        AiEngine.ANTIGRAVITY -> "Hỏi Antigravity (Gemini 3.8)..."
-                        AiEngine.CLINE -> "Yêu cầu Cline (DeepSeek / Claude)..."
+                    val hint = when {
+                        isCodexDisconnected -> "Mất kết nối tới server..."
+                        !isAuthed -> "Vui lòng đăng nhập để bắt đầu trò chuyện..."
+                        state.activeEngine == AiEngine.CODEX -> "Hỏi Codex hoặc nhập lệnh..."
+                        state.activeEngine == AiEngine.ANTIGRAVITY -> "Hỏi Antigravity (Gemini 3.8)..."
+                        state.activeEngine == AiEngine.CLINE -> "Yêu cầu Cline (DeepSeek / Claude)..."
+                        else -> "Nhập tin nhắn..."
                     }
                     Text(hint, color = SecondaryText, fontSize = 14.sp)
                 },
@@ -1493,9 +1630,21 @@ private fun Composer(
                     Text("■", color = Color.White, fontSize = 16.sp)
                 }
             } else {
+                val btnBgColor = when {
+                    isCodexDisconnected -> DangerRed
+                    !isAuthed -> WarningYellow
+                    else -> sendColor
+                }
+                val btnIcon = when {
+                    isCodexDisconnected -> "⚡"
+                    !isAuthed -> "🔒"
+                    else -> "➔"
+                }
                 Button(
                     onClick = {
-                        if (!isAuthed) {
+                        if (isCodexDisconnected) {
+                            onConnectCodex()
+                        } else if (!isAuthed) {
                             when (state.activeEngine) {
                                 AiEngine.ANTIGRAVITY -> onOpenAntigravityLogin()
                                 AiEngine.CLINE -> onOpenClineLogin()
@@ -1505,13 +1654,13 @@ private fun Composer(
                             onSend()
                         }
                     },
-                    enabled = !isAuthed || state.inputText.isNotBlank() || state.attachments.isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (!isAuthed) WarningYellow else sendColor),
+                    enabled = isCodexDisconnected || !isAuthed || state.inputText.isNotBlank() || state.attachments.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = btnBgColor),
                     shape = CircleShape,
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.size(42.dp)
                 ) {
-                    Text(if (!isAuthed) "🔒" else "➔", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(btnIcon, color = if (btnBgColor == CodexGreen) AppBackground else Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
