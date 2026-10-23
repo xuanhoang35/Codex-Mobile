@@ -186,12 +186,7 @@ class CodexWebSocketClient(
     }
 
     fun startAccountLogin() {
-        val id = requestIds.getAndIncrement()
-        accountLoginRequests.add(id)
-        val params = JSONObject()
-            .put("type", "chatgpt")
-            .put("useHostedLoginSuccessPage", true)
-        sendRequest("account/login/start", id, params)
+        startDeviceCodeLogin()
     }
 
     private fun sendThreadMutation(method: String, params: JSONObject) {
@@ -707,13 +702,16 @@ class CodexWebSocketClient(
     }
 
     private fun parseAccountLogin(result: JSONObject): AccountLoginChallenge {
-        val loginId = result.optString("loginId")
-        val authUrl = result.optString("authUrl")
-        val verificationUrl = result.optString("verificationUrl")
-        val verificationUri = result.optString("verificationUri")
+        val loginId = result.optString("loginId").ifBlank { result.optString("login_id") }
+        val authUrl = result.optString("authUrl").ifBlank { result.optString("auth_url") }
+        val verificationUrl = result.optString("verificationUrl").ifBlank { result.optString("verification_url") }
+        val verificationUri = result.optString("verificationUri").ifBlank { result.optString("verification_uri") }
         val url = result.optString("url")
-        val finalUrl = authUrl.ifBlank { verificationUrl.ifBlank { verificationUri.ifBlank { url } } }
-        val userCode = result.optString("userCode")
+        var finalUrl = authUrl.ifBlank { verificationUrl.ifBlank { verificationUri.ifBlank { url } } }
+        val userCode = result.optString("userCode").ifBlank { result.optString("user_code") }
+        if (finalUrl.isBlank() && userCode.isNotBlank()) {
+            finalUrl = "https://auth.openai.com/codex/device"
+        }
         return AccountLoginChallenge(loginId, finalUrl, userCode)
     }
 

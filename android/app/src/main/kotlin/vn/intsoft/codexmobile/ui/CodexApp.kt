@@ -79,14 +79,13 @@ fun CodexApp(viewModel: CodexViewModel) {
             clipboard?.setPrimaryClip(ClipData.newPlainText("Codex Code", challenge.userCode))
             Toast.makeText(context, "Mã xác thực ChatGPT: ${challenge.userCode} (Đã tự động sao chép)", Toast.LENGTH_LONG).show()
         }
-        if (challenge.verificationUri.isNotBlank()) {
-            try {
-                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(challenge.verificationUri)).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(browserIntent)
-            } catch (_: Throwable) { }
-        }
+        val targetUrl = challenge.verificationUri.ifBlank { "https://auth.openai.com/codex/device" }
+        try {
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(browserIntent)
+        } catch (_: Throwable) { }
     }
 
     // Image Picker Launcher
@@ -2598,6 +2597,7 @@ private fun AccountLoginDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2605,32 +2605,57 @@ private fun AccountLoginDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (challenge.userCode.isNotBlank()) {
                     Text(
-                        text = "Vui lòng mở liên kết sau trong trình duyệt và nhập mã xác thực (mã đã được tự động sao chép):",
+                        text = "1. Mã xác thực thiết bị (đã được tự động sao chép):",
                         color = SecondaryText,
                         fontSize = 13.sp
                     )
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = InputBackground),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 text = challenge.userCode,
                                 color = CodexGreen,
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 2.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Dán mã này vào trang xác thực OpenAI trên trình duyệt",
+                                color = SecondaryText,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
+                    Button(
+                        onClick = {
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("Codex Code", challenge.userCode))
+                            Toast.makeText(context, "Đã sao chép mã: ${challenge.userCode}", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = InputBackground)
+                    ) {
+                        Text("📋 Sao chép lại mã", color = CodexGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(
+                        text = "2. Bấm nút dưới để mở trình duyệt, đăng nhập Google/OpenAI và xác nhận:",
+                        color = SecondaryText,
+                        fontSize = 13.sp
+                    )
                 } else {
                     Text(
                         text = "Trình duyệt đang mở trang xác thực tài khoản ChatGPT / OpenAI. Sau khi bạn chọn tài khoản và chấp thuận đăng nhập, ứng dụng sẽ tự động hoàn tất kết nối.",
@@ -2641,20 +2666,39 @@ private fun AccountLoginDialog(
 
                 Button(
                     onClick = {
-                        if (challenge.verificationUri.isNotBlank()) {
-                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(challenge.verificationUri)).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(browserIntent)
+                        val targetUrl = challenge.verificationUri.ifBlank { "https://auth.openai.com/codex/device" }
+                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
+                        context.startActivity(browserIntent)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = CodexGreen)
                 ) {
                     Text(
-                        text = if (challenge.userCode.isNotBlank()) "Mở lại trình duyệt đăng nhập" else "Mở lại trang đăng nhập ChatGPT",
+                        text = if (challenge.userCode.isNotBlank()) "🌐 Mở trang xác thực OpenAI" else "🌐 Mở lại trang đăng nhập ChatGPT",
                         color = AppBackground,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = CodexGreen
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Đang chờ xác nhận từ trình duyệt…",
+                        color = SecondaryText,
+                        fontSize = 12.sp
                     )
                 }
             }
