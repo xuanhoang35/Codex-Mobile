@@ -294,14 +294,27 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openAntigravityBrowserLogin(context: Context) {
+        val existing = _uiState.value.antigravityUser ?: GoogleUserProfile(
+            email = "Google Account",
+            displayName = "Tài khoản Google",
+            accessToken = ""
+        )
+        tokenStore.saveAntigravityGoogleUser(existing)
+        _uiState.update {
+            it.copy(
+                antigravityUser = existing,
+                googleUser = if (it.activeEngine == AiEngine.ANTIGRAVITY) existing else it.googleUser,
+                connectionStatus = "Sẵn sàng"
+            )
+        }
         try {
-            val url = "https://xuanhoang35.github.io/Codex-Mobile/client/auth.html?engine=antigravity"
+            val url = "https://accounts.google.com/AccountChooser?service=lso&continue=https://aistudio.google.com/"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (_: Throwable) {
-            val fallback = "https://accounts.google.com/signin/v2/identifier?flowName=GlifWebSignIn"
+            val fallback = "https://accounts.google.com/signin"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fallback)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -310,18 +323,26 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openClineBrowserLogin(context: Context) {
+        val existing = _uiState.value.clineUser ?: GoogleUserProfile(
+            email = "Cline Account",
+            displayName = "Tài khoản Cline",
+            accessToken = ""
+        )
+        tokenStore.saveClineGoogleUser(existing)
+        _uiState.update {
+            it.copy(
+                clineUser = existing,
+                googleUser = if (it.activeEngine == AiEngine.CLINE) existing else it.googleUser,
+                connectionStatus = "Sẵn sàng"
+            )
+        }
         try {
-            val url = "https://xuanhoang35.github.io/Codex-Mobile/client/auth.html?engine=cline"
+            val url = "https://openrouter.ai/auth/signin"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (_: Throwable) {
-            val fallback = "https://openrouter.ai/auth/signin"
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fallback)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
         }
     }
 
