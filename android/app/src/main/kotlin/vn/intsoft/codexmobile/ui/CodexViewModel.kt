@@ -295,27 +295,37 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openAntigravityBrowserLogin(context: Context) {
         try {
-            val url = "https://accounts.google.com/AccountChooser?service=lso&continue=https://aistudio.google.com/app/apikey"
+            val url = "https://xuanhoang35.github.io/Codex-Mobile/client/auth.html?engine=antigravity"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (_: Throwable) {
+            val fallback = "https://accounts.google.com/signin/v2/identifier?flowName=GlifWebSignIn"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fallback)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
         }
     }
 
     fun openClineBrowserLogin(context: Context) {
         try {
-            val url = "https://openrouter.ai/auth/signin?callbackUrl=/keys"
+            val url = "https://xuanhoang35.github.io/Codex-Mobile/client/auth.html?engine=cline"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (_: Throwable) {
+            val fallback = "https://openrouter.ai/auth/signin"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fallback)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
         }
     }
 
-    fun signInAntigravityGoogle(email: String, displayName: String, apiKeyOrToken: String) {
+    fun signInAntigravityGoogle(email: String, displayName: String, apiKeyOrToken: String = "") {
         val cleanEmail = email.trim()
         val user = GoogleUserProfile(
             email = cleanEmail.ifBlank { "google_user@gmail.com" },
@@ -331,7 +341,7 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 antigravityUser = user,
                 googleUser = if (it.activeEngine == AiEngine.ANTIGRAVITY) user else it.googleUser,
                 antigravityApiKey = if (apiKeyOrToken.isNotBlank()) apiKeyOrToken.trim() else it.antigravityApiKey,
-                connectionStatus = "Đã đăng nhập Google (Antigravity)"
+                connectionStatus = "Sẵn sàng"
             )
         }
     }
@@ -344,12 +354,12 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 antigravityUser = null,
                 antigravityApiKey = "",
                 googleUser = if (it.activeEngine == AiEngine.ANTIGRAVITY) null else it.googleUser,
-                connectionStatus = "Đã đăng xuất Google (Antigravity)"
+                connectionStatus = if (it.activeEngine == AiEngine.ANTIGRAVITY) "Chưa đăng nhập" else it.connectionStatus
             )
         }
     }
 
-    fun signInClineGoogle(email: String, displayName: String, apiKeyOrToken: String) {
+    fun signInClineGoogle(email: String, displayName: String, apiKeyOrToken: String = "") {
         val cleanEmail = email.trim()
         val user = GoogleUserProfile(
             email = cleanEmail.ifBlank { "cline_user@gmail.com" },
@@ -365,7 +375,7 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 clineUser = user,
                 googleUser = if (it.activeEngine == AiEngine.CLINE) user else it.googleUser,
                 clineApiKey = if (apiKeyOrToken.isNotBlank()) apiKeyOrToken.trim() else it.clineApiKey,
-                connectionStatus = "Đã đăng nhập Google (Cline)"
+                connectionStatus = "Sẵn sàng"
             )
         }
     }
@@ -378,7 +388,7 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 clineUser = null,
                 clineApiKey = "",
                 googleUser = if (it.activeEngine == AiEngine.CLINE) null else it.googleUser,
-                connectionStatus = "Đã đăng xuất Google (Cline)"
+                connectionStatus = if (it.activeEngine == AiEngine.CLINE) "Chưa đăng nhập" else it.connectionStatus
             )
         }
     }

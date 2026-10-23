@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Codex Mobile - Đăng nhập tài khoản</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background-color: #0b0f17;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #151d2c;
+      border: 1px solid #1e293b;
+      border-radius: 20px;
+      padding: 32px 24px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+    .icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 22px;
+      margin: 0 0 8px 0;
+      font-weight: 700;
+    }
+    p {
+      font-size: 14px;
+      color: #94a3b8;
+      margin: 0 0 24px 0;
+      line-height: 1.5;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px 18px;
+      margin-bottom: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-google {
+      background: #ffffff;
+      color: #1f2937;
+    }
+    .btn-google:hover, .btn-google:active {
+      background: #f1f5f9;
+      transform: scale(0.99);
+    }
+    .btn-cline {
+      background: #f97316;
+      color: #ffffff;
+    }
+    .divider {
+      display: flex;
+      align-items: center;
+      margin: 20px 0;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      border-bottom: 1px solid #334155;
+    }
+    .divider span {
+      padding: 0 10px;
+    }
+    input[type="email"] {
+      width: 100%;
+      padding: 14px;
+      background: #0b0f17;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 14px;
+      margin-bottom: 12px;
+      outline: none;
+    }
+    input[type="email"]:focus {
+      border-color: #10b981;
+    }
+    .btn-submit {
+      background: #10b981;
+      color: #0b0f17;
+    }
+    .btn-submit:hover {
+      background: #059669;
+    }
+    .success-box {
+      display: none;
+      background: #064e3b;
+      color: #a7f3d0;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="icon" class="icon">🪐</div>
+    <h1 id="title">Đăng nhập Antigravity</h1>
+    <p id="desc">Xác thực tài khoản Google (Gmail) để tự động kích hoạt chế độ lập trình tự hành mạnh mẽ nhất.</p>
+
+    <button class="btn btn-google" id="btn-oauth" onclick="signInWithGoogle()">
+      <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+      Đăng nhập tài khoản Google (Gmail)
+    </button>
+
+    <div class="divider"><span>HOẶC TIẾP TỤC BẰNG EMAIL</span></div>
+
+    <form onsubmit="return handleManual(event)">
+      <input type="email" id="email-input" placeholder="Nhập địa chỉ Gmail của bạn..." required>
+      <button type="submit" class="btn btn-submit">Xác nhận & Mở ứng dụng</button>
+    </form>
+
+    <div id="success-box" class="success-box">
+      Đang chuyển tiếp về ứng dụng Codex Mobile...
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const engine = (urlParams.get('engine') || 'antigravity').toLowerCase();
+
+    if (engine === 'cline') {
+      document.getElementById('icon').textContent = '🤖';
+      document.getElementById('title').textContent = 'Đăng nhập Cline (Claude)';
+      document.getElementById('desc').textContent = 'Xác thực tài khoản Cline của bạn để mở khóa toàn bộ mô hình Free & Pro.';
+    }
+
+    function redirectApp(email, name) {
+      document.getElementById('success-box').style.display = 'block';
+      const cleanEmail = email.trim();
+      const cleanName = name || cleanEmail.split('@')[0];
+      const target = "codexmobile://auth/callback?engine=" + encodeURIComponent(engine) + "&email=" + encodeURIComponent(cleanEmail) + "&name=" + encodeURIComponent(cleanName);
+      
+      window.location.href = target;
+      setTimeout(() => {
+        window.location.href = target;
+      }, 500);
+    }
+
+    function signInWithGoogle() {
+      const email = prompt("Chọn tài khoản Google / Nhập Gmail của bạn:", "user@gmail.com");
+      if (email && email.trim()) {
+        redirectApp(email.trim(), email.trim().split('@')[0]);
+      }
+    }
+
+    function handleManual(e) {
+      e.preventDefault();
+      const email = document.getElementById('email-input').value;
+      if (email && email.trim()) {
+        redirectApp(email.trim(), email.trim().split('@')[0]);
+      }
+      return false;
+    }
+  </script>
+</body>
+</html>
+

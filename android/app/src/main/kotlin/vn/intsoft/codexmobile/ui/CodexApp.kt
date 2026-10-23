@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -67,10 +68,26 @@ fun CodexApp(viewModel: CodexViewModel) {
     var showActivityLogs by remember { mutableStateOf(false) }
     var showUsageDialog by remember { mutableStateOf(false) }
     var showArchiveDialog by remember { mutableStateOf(false) }
-    var showAntigravityLoginDialog by remember { mutableStateOf(false) }
-    var showClineLoginDialog by remember { mutableStateOf(false) }
     var renameTargetThread by remember { mutableStateOf<ThreadSummary?>(null) }
     var threadActionTarget by remember { mutableStateOf<ThreadSummary?>(null) }
+
+    // Auto-launch browser for OAuth / Device Code
+    LaunchedEffect(state.loginChallenge) {
+        val challenge = state.loginChallenge ?: return@LaunchedEffect
+        if (challenge.userCode.isNotBlank()) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboard?.setPrimaryClip(ClipData.newPlainText("Codex Code", challenge.userCode))
+            Toast.makeText(context, "Mã xác thực ChatGPT: ${challenge.userCode} (Đã tự động sao chép)", Toast.LENGTH_LONG).show()
+        }
+        if (challenge.verificationUri.isNotBlank()) {
+            try {
+                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(challenge.verificationUri)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(browserIntent)
+            } catch (_: Throwable) { }
+        }
+    }
 
     // Image Picker Launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -130,11 +147,9 @@ fun CodexApp(viewModel: CodexViewModel) {
                         state = state,
                         onSelectEngine = { viewModel.selectEngine(it) },
                         onOpenAntigravityLogin = {
-                            showAntigravityLoginDialog = true
                             viewModel.openAntigravityBrowserLogin(context)
                         },
                         onOpenClineLogin = {
-                            showClineLoginDialog = true
                             viewModel.openClineBrowserLogin(context)
                         },
                         onOpenCodexLogin = { viewModel.startAccountLogin() },
@@ -187,11 +202,9 @@ fun CodexApp(viewModel: CodexViewModel) {
                     onClearQueue = { viewModel.clearQueue() },
                     onOpenDrawer = { viewModel.toggleHistory() },
                     onOpenAntigravityLogin = {
-                        showAntigravityLoginDialog = true
                         viewModel.openAntigravityBrowserLogin(context)
                     },
                     onOpenClineLogin = {
-                        showClineLoginDialog = true
                         viewModel.openClineBrowserLogin(context)
                     },
                     onOpenCodexLogin = {
@@ -210,9 +223,8 @@ fun CodexApp(viewModel: CodexViewModel) {
         SettingsDialog(
             state = state,
             onDismiss = { showSettings = false },
-            onSave = { endpoint, workspace, token, antigravityKey, clineKey, clineEndpoint ->
+            onSave = { endpoint, workspace, token ->
                 viewModel.saveSettings(endpoint, workspace, token)
-                viewModel.saveEngineSettings(antigravityKey, clineKey, clineEndpoint)
                 showSettings = false
             },
             onClearToken = { viewModel.clearToken() },
@@ -221,13 +233,11 @@ fun CodexApp(viewModel: CodexViewModel) {
             onRefreshAccount = { viewModel.refreshAccount() },
             onOpenAntigravityLogin = {
                 showSettings = false
-                showAntigravityLoginDialog = true
                 viewModel.openAntigravityBrowserLogin(context)
             },
             onSignOutAntigravity = { viewModel.signOutAntigravity() },
             onOpenClineLogin = {
                 showSettings = false
-                showClineLoginDialog = true
                 viewModel.openClineBrowserLogin(context)
             },
             onSignOutCline = { viewModel.signOutCline() },
@@ -240,30 +250,6 @@ fun CodexApp(viewModel: CodexViewModel) {
                 showSettings = false
                 showActivityLogs = true
             }
-        )
-    }
-
-    // Dialog: Antigravity Browser Google Sign-In
-    if (showAntigravityLoginDialog) {
-        AntigravityBrowserLoginDialog(
-            currentUser = state.antigravityUser,
-            onSignIn = { email, displayName, key ->
-                viewModel.signInAntigravityGoogle(email, displayName, key)
-                showAntigravityLoginDialog = false
-            },
-            onDismiss = { showAntigravityLoginDialog = false }
-        )
-    }
-
-    // Dialog: Cline Browser Google Sign-In
-    if (showClineLoginDialog) {
-        ClineBrowserLoginDialog(
-            currentUser = state.clineUser,
-            onSignIn = { email, displayName, key ->
-                viewModel.signInClineGoogle(email, displayName, key)
-                showClineLoginDialog = false
-            },
-            onDismiss = { showClineLoginDialog = false }
         )
     }
 
@@ -1946,7 +1932,7 @@ private fun PermissionPickerDialog(
 private fun SettingsDialog(
     state: CodexUiState,
     onDismiss: () -> Unit,
-    onSave: (endpoint: String, workspace: String, token: String, antigravityKey: String, clineKey: String, clineEndpoint: String) -> Unit,
+    onSave: (endpoint: String, workspace: String, token: String) -> Unit,
     onClearToken: () -> Unit,
     onSwitchAccount: () -> Unit,
     onLogoutAccount: () -> Unit,
@@ -1962,9 +1948,6 @@ private fun SettingsDialog(
     var endpoint by remember { mutableStateOf(state.endpoint) }
     var workspace by remember { mutableStateOf(state.workspace) }
     var token by remember { mutableStateOf("") }
-    var antigravityKey by remember { mutableStateOf(state.antigravityApiKey) }
-    var clineKey by remember { mutableStateOf(state.clineApiKey) }
-    var clineEndpoint by remember { mutableStateOf(state.clineCustomEndpoint) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -2011,13 +1994,6 @@ private fun SettingsDialog(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    DarkTextField(
-                        value = antigravityKey,
-                        onValueChange = { antigravityKey = it },
-                        label = "Google AI Studio API Key (tự động nhận từ Google)",
-                        isPassword = true
-                    )
                 }
 
                 // Cline (Universal Agent) Section
@@ -2057,19 +2033,6 @@ private fun SettingsDialog(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    DarkTextField(
-                        value = clineEndpoint,
-                        onValueChange = { clineEndpoint = it },
-                        label = "Endpoint OpenRouter hoặc API tùy chọn"
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    DarkTextField(
-                        value = clineKey,
-                        onValueChange = { clineKey = it },
-                        label = "OpenRouter / Claude API Key",
-                        isPassword = true
-                    )
                 }
 
                 // Codex Server Section
@@ -2165,10 +2128,7 @@ private fun SettingsDialog(
                     onSave(
                         endpoint.trim(),
                         workspace.trim(),
-                        token.trim(),
-                        antigravityKey.trim(),
-                        clineKey.trim(),
-                        clineEndpoint.trim()
+                        token.trim()
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = CodexGreen)
@@ -2210,205 +2170,6 @@ private fun SettingsDialog(
     }
 }
 
-@Composable
-fun AntigravityBrowserLoginDialog(
-    currentUser: GoogleUserProfile?,
-    onSignIn: (email: String, displayName: String, key: String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    var email by remember { mutableStateOf(currentUser?.email ?: "") }
-    var apiKey by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🪐 Đăng nhập Google Antigravity", color = PrimaryText, fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "1. Bấm nút dưới để mở trình duyệt ngoài đăng nhập Gmail của Google:\n" +
-                           "2. Xác thực tài khoản Gmail trên Google AI Studio.\n" +
-                           "3. Sao chép API Key rồi bấm 'Dán từ bộ nhớ tạm' để hoàn tất.",
-                    color = SecondaryText,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp
-                )
-                Button(
-                    onClick = {
-                        val url = "https://accounts.google.com/AccountChooser?service=lso&continue=https://aistudio.google.com/app/apikey"
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple)
-                ) {
-                    Text("🌐 Mở Trình Duyệt Đăng Nhập Google", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-
-                DarkTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = "Địa chỉ Gmail của bạn"
-                )
-
-                DarkTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = "Google Gemini API Key / Token",
-                    isPassword = true
-                )
-
-                OutlinedButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        val clip = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                        if (clip.isNotBlank()) {
-                            apiKey = clip.trim()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("📋 Tự động dán từ bộ nhớ tạm", color = PrimaryText, fontSize = 12.sp)
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val cleanEmail = email.trim().ifBlank { "google_user@gmail.com" }
-                    val name = cleanEmail.substringBefore("@")
-                    onSignIn(cleanEmail, name, apiKey.trim())
-                },
-                enabled = apiKey.isNotBlank() || email.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple)
-            ) {
-                Text("Xác nhận & Hoàn tất", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Hủy", color = SecondaryText)
-            }
-        },
-        containerColor = PanelBackground
-    )
-}
-
-@Composable
-fun ClineBrowserLoginDialog(
-    currentUser: GoogleUserProfile?,
-    onSignIn: (email: String, displayName: String, key: String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    var email by remember { mutableStateOf(currentUser?.email ?: "") }
-    var apiKey by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🤖 Đăng nhập Google Cline", color = PrimaryText, fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "1. Bấm nút dưới để mở trình duyệt ngoài đăng nhập Google (OpenRouter):\n" +
-                           "2. Chọn 'Sign in with Google' bằng tài khoản Gmail của bạn.\n" +
-                           "3. Tạo khóa API rồi dán vào đây để Cline hoạt động không giới hạn.",
-                    color = SecondaryText,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp
-                )
-                Button(
-                    onClick = {
-                        val url = "https://openrouter.ai/auth/signin?callbackUrl=/keys"
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = ClineOrange)
-                ) {
-                    Text("🌐 Mở Trình Duyệt Đăng Nhập Google", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-
-                DarkTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = "Địa chỉ Gmail của bạn"
-                )
-
-                DarkTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = "OpenRouter / Claude API Key",
-                    isPassword = true
-                )
-
-                OutlinedButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        val clip = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                        if (clip.isNotBlank()) {
-                            apiKey = clip.trim()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("📋 Tự động dán từ bộ nhớ tạm", color = PrimaryText, fontSize = 12.sp)
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val cleanEmail = email.trim().ifBlank { "cline_user@gmail.com" }
-                    val name = cleanEmail.substringBefore("@")
-                    onSignIn(cleanEmail, name, apiKey.trim())
-                },
-                enabled = apiKey.isNotBlank() || email.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = ClineOrange)
-            ) {
-                Text("Xác nhận & Hoàn tất", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Hủy", color = SecondaryText)
-            }
-        },
-        containerColor = PanelBackground
-    )
-}
-
-// Backwards compatibility alias
-@Composable
-fun GoogleLoginDialog(
-    currentUser: GoogleUserProfile?,
-    onSignIn: (email: String, name: String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AntigravityBrowserLoginDialog(
-        currentUser = currentUser,
-        onSignIn = { email, name, _ -> onSignIn(email, name) },
-        onDismiss = onDismiss
-    )
-}
 
 @Composable
 fun DarkTextField(
@@ -2846,38 +2607,55 @@ private fun AccountLoginDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = "Vui lòng mở liên kết sau trong trình duyệt và nhập mã xác thực:",
-                    color = SecondaryText,
-                    fontSize = 13.sp
-                )
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = InputBackground),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                if (challenge.userCode.isNotBlank()) {
+                    Text(
+                        text = "Vui lòng mở liên kết sau trong trình duyệt và nhập mã xác thực (mã đã được tự động sao chép):",
+                        color = SecondaryText,
+                        fontSize = 13.sp
+                    )
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = InputBackground),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text(
-                            text = challenge.userCode,
-                            color = CodexGreen,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = challenge.userCode,
+                                color = CodexGreen,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
+                } else {
+                    Text(
+                        text = "Trình duyệt đang mở trang xác thực tài khoản ChatGPT / OpenAI. Sau khi bạn chọn tài khoản và chấp thuận đăng nhập, ứng dụng sẽ tự động hoàn tất kết nối.",
+                        color = SecondaryText,
+                        fontSize = 13.sp
+                    )
                 }
+
                 Button(
                     onClick = {
-                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(challenge.verificationUri))
-                        context.startActivity(browserIntent)
+                        if (challenge.verificationUri.isNotBlank()) {
+                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(challenge.verificationUri)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(browserIntent)
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = CodexGreen)
                 ) {
-                    Text("Mở trình duyệt đăng nhập", color = AppBackground, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (challenge.userCode.isNotBlank()) "Mở lại trình duyệt đăng nhập" else "Mở lại trang đăng nhập ChatGPT",
+                        color = AppBackground,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         },

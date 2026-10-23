@@ -186,7 +186,12 @@ class CodexWebSocketClient(
     }
 
     fun startAccountLogin() {
-        startDeviceCodeLogin()
+        val id = requestIds.getAndIncrement()
+        accountLoginRequests.add(id)
+        val params = JSONObject()
+            .put("type", "chatgpt")
+            .put("useHostedLoginSuccessPage", true)
+        sendRequest("account/login/start", id, params)
     }
 
     private fun sendThreadMutation(method: String, params: JSONObject) {
@@ -483,6 +488,17 @@ class CodexWebSocketClient(
 
     private fun handleResponse(message: JSONObject) {
         val id = message.optLong("id")
+        val errorObj = message.optJSONObject("error")
+        if (errorObj != null) {
+            if (accountLoginRequests.remove(id)) {
+                startDeviceCodeLogin()
+                return
+            }
+            val errorMsg = errorObj.optString("message").ifBlank { "Lỗi server: $errorObj" }
+            listener.onError(errorMsg)
+            return
+        }
+
         if (id == 1L) {
             afterInitialize()
             return
@@ -692,9 +708,13 @@ class CodexWebSocketClient(
 
     private fun parseAccountLogin(result: JSONObject): AccountLoginChallenge {
         val loginId = result.optString("loginId")
+        val authUrl = result.optString("authUrl")
         val verificationUrl = result.optString("verificationUrl")
+        val verificationUri = result.optString("verificationUri")
+        val url = result.optString("url")
+        val finalUrl = authUrl.ifBlank { verificationUrl.ifBlank { verificationUri.ifBlank { url } } }
         val userCode = result.optString("userCode")
-        return AccountLoginChallenge(loginId, verificationUrl, userCode)
+        return AccountLoginChallenge(loginId, finalUrl, userCode)
     }
 
     fun scheduleReconnect() {
