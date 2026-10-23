@@ -372,12 +372,15 @@ fun CodexApp(viewModel: CodexViewModel) {
     if (showAntigravitySetup) {
         AntigravitySetupDialog(
             initialKey = state.antigravityApiKey,
+            initialEmail = state.antigravityUser?.email ?: "",
             onDismiss = { showAntigravitySetup = false },
             onOpenBrowser = { viewModel.openAntigravityBrowserLogin(context) },
-            onSaveKey = { key ->
+            onSave = { email, key ->
+                val cleanEmail = email.ifBlank { "user@gmail.com" }
+                val cleanName = cleanEmail.substringBefore("@").ifBlank { "Google User" }
                 viewModel.signInAntigravityGoogle(
-                    email = "Google Gemini Free",
-                    displayName = "Google AI Studio",
+                    email = cleanEmail,
+                    displayName = cleanName,
                     apiKeyOrToken = key
                 )
                 showAntigravitySetup = false
@@ -389,12 +392,15 @@ fun CodexApp(viewModel: CodexViewModel) {
     if (showClineSetup) {
         ClineSetupDialog(
             initialKey = state.clineApiKey,
+            initialEmail = state.clineUser?.email ?: "",
             onDismiss = { showClineSetup = false },
             onOpenBrowser = { viewModel.openClineBrowserLogin(context) },
-            onSaveKey = { key ->
+            onSave = { email, key ->
+                val cleanEmail = email.ifBlank { "cline@user.com" }
+                val cleanName = cleanEmail.substringBefore("@").ifBlank { "Cline User" }
                 viewModel.signInClineGoogle(
-                    email = "OpenRouter Free Models",
-                    displayName = "Cline AI",
+                    email = cleanEmail,
+                    displayName = cleanName,
                     apiKeyOrToken = key
                 )
                 showClineSetup = false
@@ -1082,13 +1088,13 @@ private fun ChatScreen(
                     }
 
                     // Streaming indicator / response
-                    if (state.isResponding && state.streamingResponse.isNotBlank()) {
+                    if (state.isResponding) {
                         item {
                             ChatMessageItem(
                                 message = ChatMessage(
                                     id = "streaming_current",
                                     role = MessageRole.ASSISTANT,
-                                    content = state.streamingResponse,
+                                    content = if (state.streamingResponse.isNotBlank()) state.streamingResponse else "Đang xử lý… ⏳",
                                     isStreaming = true,
                                     engine = state.activeEngine
                                 )
@@ -2765,12 +2771,15 @@ fun darkFieldColors() = OutlinedTextFieldDefaults.colors(
 @Composable
 private fun AntigravitySetupDialog(
     initialKey: String,
+    initialEmail: String,
     onDismiss: () -> Unit,
     onOpenBrowser: () -> Unit,
-    onSaveKey: (String) -> Unit
+    onSave: (email: String, key: String) -> Unit
 ) {
     val context = LocalContext.current
+    var emailText by remember { mutableStateOf(initialEmail.ifBlank { "user@gmail.com" }) }
     var keyText by remember { mutableStateOf(initialKey) }
+    var showAdvancedKey by remember { mutableStateOf(initialKey.isNotBlank()) }
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
 
     AlertDialog(
@@ -2779,69 +2788,84 @@ private fun AntigravitySetupDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AntigravityBrandIcon(size = 22.dp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Đăng nhập Google Gemini", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Đăng nhập Antigravity (Google)", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Mô hình Antigravity của Google DeepMind hoạt động qua Google AI Studio Gemini API hoàn toàn miễn phí.",
+                    text = "Đăng nhập tài khoản Google để sử dụng mô hình trí tuệ nhân tạo DeepMind hoàn toàn miễn phí.",
                     color = SecondaryText,
                     fontSize = 13.sp
                 )
-                Button(
-                    onClick = onOpenBrowser,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(vertical = 10.dp)
-                ) {
-                    Text("🌐 Mở Google AI Studio để sao chép Key", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                Text(
-                    text = "Tài khoản Google của bạn đã có sẵn API Key (như trong ảnh chụp), bấm sao chép và dán vào bên dưới:",
-                    color = SecondaryText,
-                    fontSize = 12.sp
-                )
                 OutlinedTextField(
-                    value = keyText,
-                    onValueChange = { keyText = it },
-                    label = { Text("Gemini API Key (bắt đầu AIzaSy...)") },
+                    value = emailText,
+                    onValueChange = { emailText = it },
+                    label = { Text("Địa chỉ Gmail của bạn") },
                     modifier = Modifier.fillMaxWidth(),
                     colors = darkFieldColors(),
-                    trailingIcon = {
-                        TextButton(
-                            onClick = {
-                                val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                if (clipText.isNotBlank()) {
-                                    keyText = clipText.trim()
-                                    Toast.makeText(context, "Đã dán mã từ Clipboard", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        ) {
-                            Text("📋 Dán", color = AntigravityPurple, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    },
                     shape = RoundedCornerShape(8.dp)
                 )
+
+                if (!showAdvancedKey) {
+                    TextButton(
+                        onClick = { showAdvancedKey = true },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("⚙️ Cấu hình API Key riêng (Tuỳ chọn)", color = AntigravityPurple, fontSize = 12.sp)
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Tuỳ chọn API Key riêng (để trống nếu dùng mặc định):",
+                        color = SecondaryText,
+                        fontSize = 11.sp
+                    )
+                    OutlinedTextField(
+                        value = keyText,
+                        onValueChange = { keyText = it },
+                        label = { Text("Gemini API Key (AIzaSy...)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = darkFieldColors(),
+                        trailingIcon = {
+                            TextButton(
+                                onClick = {
+                                    val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                    if (clipText.isNotBlank()) {
+                                        keyText = clipText.trim()
+                                        Toast.makeText(context, "Đã dán mã từ Clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                Text("📋 Dán", color = AntigravityPurple, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Button(
+                        onClick = onOpenBrowser,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = InputBackground),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        Text("🌐 Mở Google AI Studio để lấy Key", color = PrimaryText, fontSize = 11.sp)
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (keyText.isBlank()) {
-                        Toast.makeText(context, "Vui lòng nhập hoặc dán Gemini API Key!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        onSaveKey(keyText.trim())
-                    }
+                    onSave(emailText.trim(), keyText.trim())
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text("Xác nhận & Bắt đầu dùng", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Đăng nhập & Bắt đầu dùng", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -2856,12 +2880,15 @@ private fun AntigravitySetupDialog(
 @Composable
 private fun ClineSetupDialog(
     initialKey: String,
+    initialEmail: String,
     onDismiss: () -> Unit,
     onOpenBrowser: () -> Unit,
-    onSaveKey: (String) -> Unit
+    onSave: (email: String, key: String) -> Unit
 ) {
     val context = LocalContext.current
+    var emailText by remember { mutableStateOf(initialEmail.ifBlank { "user@cline.ai" }) }
     var keyText by remember { mutableStateOf(initialKey) }
+    var showAdvancedKey by remember { mutableStateOf(initialKey.isNotBlank()) }
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
 
     AlertDialog(
@@ -2870,69 +2897,84 @@ private fun ClineSetupDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ClineBrandIcon(size = 22.dp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Đăng nhập Cline (OpenRouter)", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Đăng nhập Cline (Universal Agent)", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Cline sử dụng OpenRouter để truy cập hàng chục mô hình AI mở miễn phí (DeepSeek R1, Llama 3.3, v.v.).",
+                    text = "Đăng nhập để sử dụng toàn bộ mô hình mở miễn phí (DeepSeek R1, Llama 3.3, v.v.).",
                     color = SecondaryText,
                     fontSize = 13.sp
                 )
-                Button(
-                    onClick = onOpenBrowser,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = ClineOrange),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(vertical = 10.dp)
-                ) {
-                    Text("🌐 Mở OpenRouter Keys (Tạo/Lấy Key)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                Text(
-                    text = "Dán OpenRouter API Key của bạn vào bên dưới:",
-                    color = SecondaryText,
-                    fontSize = 12.sp
-                )
                 OutlinedTextField(
-                    value = keyText,
-                    onValueChange = { keyText = it },
-                    label = { Text("OpenRouter Key (sk-or-v1-...)") },
+                    value = emailText,
+                    onValueChange = { emailText = it },
+                    label = { Text("Tài khoản / Email của bạn") },
                     modifier = Modifier.fillMaxWidth(),
                     colors = darkFieldColors(),
-                    trailingIcon = {
-                        TextButton(
-                            onClick = {
-                                val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                if (clipText.isNotBlank()) {
-                                    keyText = clipText.trim()
-                                    Toast.makeText(context, "Đã dán mã từ Clipboard", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        ) {
-                            Text("📋 Dán", color = ClineOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    },
                     shape = RoundedCornerShape(8.dp)
                 )
+
+                if (!showAdvancedKey) {
+                    TextButton(
+                        onClick = { showAdvancedKey = true },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("⚙️ Cấu hình API Key riêng (Tuỳ chọn)", color = ClineOrange, fontSize = 12.sp)
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Tuỳ chọn OpenRouter Key riêng (để trống nếu dùng mặc định):",
+                        color = SecondaryText,
+                        fontSize = 11.sp
+                    )
+                    OutlinedTextField(
+                        value = keyText,
+                        onValueChange = { keyText = it },
+                        label = { Text("OpenRouter Key (sk-or-v1-...)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = darkFieldColors(),
+                        trailingIcon = {
+                            TextButton(
+                                onClick = {
+                                    val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                    if (clipText.isNotBlank()) {
+                                        keyText = clipText.trim()
+                                        Toast.makeText(context, "Đã dán mã từ Clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                Text("📋 Dán", color = ClineOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Button(
+                        onClick = onOpenBrowser,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = InputBackground),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        Text("🌐 Mở OpenRouter để lấy Key", color = PrimaryText, fontSize = 11.sp)
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (keyText.isBlank()) {
-                        Toast.makeText(context, "Vui lòng nhập hoặc dán OpenRouter API Key!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        onSaveKey(keyText.trim())
-                    }
+                    onSave(emailText.trim(), keyText.trim())
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = ClineOrange),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text("Xác nhận & Bắt đầu dùng", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Đăng nhập & Bắt đầu dùng", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

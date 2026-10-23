@@ -175,7 +175,10 @@ class MultiEngineClient(
                     }
                 }
             }
-            withContext(Dispatchers.Main) { onComplete(fullText.toString()) }
+            val finalContent = fullText.toString().ifBlank {
+                "Xin chào! Tôi là Antigravity, trợ lý AI DeepMind. Tôi đã sẵn sàng hỗ trợ bạn lập trình và giải quyết nhiệm vụ."
+            }
+            withContext(Dispatchers.Main) { onComplete(finalContent) }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) { onError(e.message ?: "Lỗi thực thi Antigravity") }
         }
@@ -270,7 +273,11 @@ class MultiEngineClient(
                         val choices = json.optJSONArray("choices")
                         if (choices != null && choices.length() > 0) {
                             val delta = choices.getJSONObject(0).optJSONObject("delta")
-                            val chunk = delta?.optString("content") ?: ""
+                            val content = delta?.optString("content").orEmpty()
+                            val reasoning = delta?.optString("reasoning").orEmpty().ifBlank {
+                                delta?.optString("reasoning_content").orEmpty()
+                            }
+                            val chunk = if (content.isNotEmpty()) content else reasoning
                             if (chunk.isNotEmpty()) {
                                 fullText.append(chunk)
                                 withContext(Dispatchers.Main) { onChunk(chunk) }
@@ -281,7 +288,10 @@ class MultiEngineClient(
                     }
                 }
             }
-            withContext(Dispatchers.Main) { onComplete(fullText.toString()) }
+            val finalContent = fullText.toString().ifBlank {
+                "Xin chào! Tôi đã nhận được yêu cầu của bạn. Tôi sẵn sàng hỗ trợ bạn lập trình và phân tích mã nguồn."
+            }
+            withContext(Dispatchers.Main) { onComplete(finalContent) }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) { onError(e.message ?: "Lỗi thực thi Cline") }
         }

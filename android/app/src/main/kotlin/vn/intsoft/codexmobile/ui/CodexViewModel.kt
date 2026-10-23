@@ -592,8 +592,15 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         },
                         onError = { error ->
+                            val errorMsg = ChatMessage(
+                                id = UUID.randomUUID().toString(),
+                                role = MessageRole.ASSISTANT,
+                                content = "⚠️ Không nhận được phản hồi:\n$error\n\nVui lòng thử lại hoặc chọn mô hình khác.",
+                                engine = AiEngine.ANTIGRAVITY
+                            )
                             _uiState.update {
                                 it.copy(
+                                    messages = it.messages + errorMsg,
                                     isResponding = false,
                                     streamingResponse = "",
                                     lastErrorMessage = error
@@ -632,8 +639,15 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         },
                         onError = { error ->
+                            val errorMsg = ChatMessage(
+                                id = UUID.randomUUID().toString(),
+                                role = MessageRole.ASSISTANT,
+                                content = "⚠️ Không nhận được phản hồi:\n$error\n\nVui lòng thử lại hoặc chọn mô hình khác.",
+                                engine = AiEngine.CLINE
+                            )
                             _uiState.update {
                                 it.copy(
+                                    messages = it.messages + errorMsg,
                                     isResponding = false,
                                     streamingResponse = "",
                                     lastErrorMessage = error

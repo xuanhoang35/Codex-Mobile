@@ -186,15 +186,7 @@ class CodexWebSocketClient(
     }
 
     fun startAccountLogin() {
-        val id = requestIds.getAndIncrement()
-        accountLoginRequests.add(id)
-        val params = JSONObject()
-            .put("type", "chatgpt")
-            .put("useHostedLoginSuccessPage", true)
-        val sent = sendRequest("account/login/start", id, params)
-        if (!sent) {
-            listener.onError("Chưa kết nối đến máy chủ Codex (codex.webdemo.name.vn). Vui lòng kiểm tra lại kết nối!")
-        }
+        startDeviceCodeLogin()
     }
 
     private fun sendThreadMutation(method: String, params: JSONObject) {
