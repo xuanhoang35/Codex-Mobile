@@ -22,6 +22,7 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     private val queueStore = QueueStore(application)
     private val snippetStore = SnippetStore(application)
     private val multiEngineClient = MultiEngineClient(tokenStore)
+    private var oauthServer: OAuthCallbackServer? = null
 
     private val _uiState = MutableStateFlow(CodexUiState())
     val uiState: StateFlow<CodexUiState> = _uiState.asStateFlow()
@@ -294,21 +295,8 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openAntigravityBrowserLogin(context: Context) {
-        val existing = _uiState.value.antigravityUser ?: GoogleUserProfile(
-            email = "Google Account",
-            displayName = "Tài khoản Google",
-            accessToken = ""
-        )
-        tokenStore.saveAntigravityGoogleUser(existing)
-        _uiState.update {
-            it.copy(
-                antigravityUser = existing,
-                googleUser = if (it.activeEngine == AiEngine.ANTIGRAVITY) existing else it.googleUser,
-                connectionStatus = "Sẵn sàng"
-            )
-        }
         try {
-            val url = "https://accounts.google.com/AccountChooser?service=lso&continue=https://aistudio.google.com/"
+            val url = "https://aistudio.google.com/api-keys"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -323,21 +311,8 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openClineBrowserLogin(context: Context) {
-        val existing = _uiState.value.clineUser ?: GoogleUserProfile(
-            email = "Cline Account",
-            displayName = "Tài khoản Cline",
-            accessToken = ""
-        )
-        tokenStore.saveClineGoogleUser(existing)
-        _uiState.update {
-            it.copy(
-                clineUser = existing,
-                googleUser = if (it.activeEngine == AiEngine.CLINE) existing else it.googleUser,
-                connectionStatus = "Sẵn sàng"
-            )
-        }
         try {
-            val url = "https://openrouter.ai/auth/signin"
+            val url = "https://openrouter.ai/keys"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -822,10 +797,26 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     // Account & Usage
     // -------------------------------------------------------------------------
     fun startAccountLogin() {
+        if (!_uiState.value.isConnected) {
+            connect()
+            _uiState.update { it.copy(connectionStatus = "Đang kết nối lại máy chủ Codex…") }
+        }
+        oauthServer?.stop()
+        oauthServer = OAuthCallbackServer { code, state ->
+            android.util.Log.d("CodexViewModel", "Captured OAuth code on 127.0.0.1:1455: $code")
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(1200)
+                webSocketClient.refreshAccount()
+                webSocketClient.refreshModels()
+                webSocketClient.refreshUsage()
+            }
+        }.also { it.start() }
+
         webSocketClient.startAccountLogin()
     }
 
     fun cancelAccountLogin() {
+        oauthServer?.stop()
         _uiState.update { it.copy(loginChallenge = null) }
     }
 
@@ -898,6 +889,7 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
+        oauthServer?.stop()
         webSocketClient.disconnect()
     }
 

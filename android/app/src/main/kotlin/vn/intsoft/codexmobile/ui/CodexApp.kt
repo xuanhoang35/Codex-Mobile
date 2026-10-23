@@ -68,6 +68,8 @@ fun CodexApp(viewModel: CodexViewModel) {
     var showActivityLogs by remember { mutableStateOf(false) }
     var showUsageDialog by remember { mutableStateOf(false) }
     var showArchiveDialog by remember { mutableStateOf(false) }
+    var showAntigravitySetup by remember { mutableStateOf(false) }
+    var showClineSetup by remember { mutableStateOf(false) }
     var renameTargetThread by remember { mutableStateOf<ThreadSummary?>(null) }
     var threadActionTarget by remember { mutableStateOf<ThreadSummary?>(null) }
 
@@ -146,10 +148,10 @@ fun CodexApp(viewModel: CodexViewModel) {
                         state = state,
                         onSelectEngine = { viewModel.selectEngine(it) },
                         onOpenAntigravityLogin = {
-                            viewModel.openAntigravityBrowserLogin(context)
+                            showAntigravitySetup = true
                         },
                         onOpenClineLogin = {
-                            viewModel.openClineBrowserLogin(context)
+                            showClineSetup = true
                         },
                         onOpenCodexLogin = { viewModel.startAccountLogin() },
                         onSignOutAntigravity = { viewModel.signOutAntigravity() },
@@ -201,10 +203,10 @@ fun CodexApp(viewModel: CodexViewModel) {
                     onClearQueue = { viewModel.clearQueue() },
                     onOpenDrawer = { viewModel.toggleHistory() },
                     onOpenAntigravityLogin = {
-                        viewModel.openAntigravityBrowserLogin(context)
+                        showAntigravitySetup = true
                     },
                     onOpenClineLogin = {
-                        viewModel.openClineBrowserLogin(context)
+                        showClineSetup = true
                     },
                     onOpenCodexLogin = {
                         viewModel.startAccountLogin()
@@ -232,12 +234,12 @@ fun CodexApp(viewModel: CodexViewModel) {
             onRefreshAccount = { viewModel.refreshAccount() },
             onOpenAntigravityLogin = {
                 showSettings = false
-                viewModel.openAntigravityBrowserLogin(context)
+                showAntigravitySetup = true
             },
             onSignOutAntigravity = { viewModel.signOutAntigravity() },
             onOpenClineLogin = {
                 showSettings = false
-                viewModel.openClineBrowserLogin(context)
+                showClineSetup = true
             },
             onSignOutCline = { viewModel.signOutCline() },
             onOpenArchive = {
@@ -365,6 +367,40 @@ fun CodexApp(viewModel: CodexViewModel) {
             onDismiss = { viewModel.cancelAccountLogin() }
         )
     }
+
+    // Dialog: Antigravity Setup (Google Gemini)
+    if (showAntigravitySetup) {
+        AntigravitySetupDialog(
+            initialKey = state.antigravityApiKey,
+            onDismiss = { showAntigravitySetup = false },
+            onOpenBrowser = { viewModel.openAntigravityBrowserLogin(context) },
+            onSaveKey = { key ->
+                viewModel.signInAntigravityGoogle(
+                    email = "Google Gemini Free",
+                    displayName = "Google AI Studio",
+                    apiKeyOrToken = key
+                )
+                showAntigravitySetup = false
+            }
+        )
+    }
+
+    // Dialog: Cline Setup (OpenRouter)
+    if (showClineSetup) {
+        ClineSetupDialog(
+            initialKey = state.clineApiKey,
+            onDismiss = { showClineSetup = false },
+            onOpenBrowser = { viewModel.openClineBrowserLogin(context) },
+            onSaveKey = { key ->
+                viewModel.signInClineGoogle(
+                    email = "OpenRouter Free Models",
+                    displayName = "Cline AI",
+                    apiKeyOrToken = key
+                )
+                showClineSetup = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -428,8 +464,8 @@ fun EngineSelectorBar(
         ) {
             when (state.activeEngine) {
                 AiEngine.ANTIGRAVITY -> {
-                    val user = state.antigravityUser
-                    if (user != null) {
+                    val isAntigravityAuthed = state.antigravityApiKey.isNotBlank() || !state.antigravityUser?.accessToken.isNullOrBlank()
+                    if (isAntigravityAuthed) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -443,7 +479,7 @@ fun EngineSelectorBar(
                                 AntigravityBrandIcon(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = user.email,
+                                    text = state.antigravityUser?.email?.ifBlank { "Google Gemini (Đã kích hoạt)" } ?: "Google Gemini (Đã kích hoạt)",
                                     color = PrimaryText,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
@@ -467,14 +503,14 @@ fun EngineSelectorBar(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 AntigravityBrandIcon(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Đăng nhập Google (Gmail) cho Antigravity", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Đăng nhập Google Gemini (Antigravity)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
                 AiEngine.CLINE -> {
-                    val user = state.clineUser
-                    if (user != null) {
+                    val isClineAuthed = state.clineApiKey.isNotBlank() || !state.clineUser?.accessToken.isNullOrBlank()
+                    if (isClineAuthed) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -488,7 +524,7 @@ fun EngineSelectorBar(
                                 ClineBrandIcon(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = user.email,
+                                    text = state.clineUser?.email?.ifBlank { "OpenRouter (Đã kích hoạt)" } ?: "OpenRouter (Đã kích hoạt)",
                                     color = PrimaryText,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
@@ -512,7 +548,7 @@ fun EngineSelectorBar(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 ClineBrandIcon(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Đăng nhập Google (Gmail) cho Cline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Đăng nhập OpenRouter cho Cline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -915,8 +951,8 @@ private fun ChatScreen(
 
     val isCodexDisconnected = state.activeEngine == AiEngine.CODEX && !state.isConnected
     val isAuthed = when (state.activeEngine) {
-        AiEngine.ANTIGRAVITY -> state.antigravityUser != null || state.antigravityApiKey.isNotBlank()
-        AiEngine.CLINE -> state.clineUser != null || state.clineApiKey.isNotBlank()
+        AiEngine.ANTIGRAVITY -> state.antigravityApiKey.isNotBlank() || !state.antigravityUser?.accessToken.isNullOrBlank()
+        AiEngine.CLINE -> state.clineApiKey.isNotBlank() || !state.clineUser?.accessToken.isNullOrBlank()
         AiEngine.CODEX -> state.isConnected && state.account != null
     }
 
@@ -968,8 +1004,8 @@ private fun ChatScreen(
                                         "Không thể kết nối đến máy chủ Codex. Vui lòng kiểm tra lại mạng Tailscale và thử kết nối lại."
                                     else
                                         "Vui lòng đăng nhập tài khoản OpenAI / ChatGPT để bắt đầu sử dụng Codex."
-                                    AiEngine.ANTIGRAVITY -> "Vui lòng đăng nhập tài khoản Google (Gmail) để kích hoạt Antigravity và sử dụng tất cả mô hình AI."
-                                    AiEngine.CLINE -> "Vui lòng đăng nhập tài khoản Google (Gmail) hoặc cấu hình API Key để kích hoạt Cline Universal Agent."
+                                    AiEngine.ANTIGRAVITY -> "Vui lòng kích hoạt Google Gemini bằng API Key miễn phí từ Google AI Studio (đã có sẵn trong tài khoản của bạn)."
+                                    AiEngine.CLINE -> "Vui lòng kích hoạt OpenRouter để sử dụng mô hình DeepSeek R1, Llama 3.3 miễn phí cho Cline."
                                 }
                                 Text(
                                     text = subtitleText,
@@ -986,8 +1022,8 @@ private fun ChatScreen(
                                     } else {
                                         Triple("🌐 Đăng nhập OpenAI / ChatGPT", CodexGreen, onOpenCodexLogin)
                                     }
-                                    AiEngine.ANTIGRAVITY -> Triple("🌐 Đăng nhập bằng Google (Gmail)", AntigravityPurple, onOpenAntigravityLogin)
-                                    AiEngine.CLINE -> Triple("🌐 Đăng nhập bằng Google (Gmail)", ClineOrange, onOpenClineLogin)
+                                    AiEngine.ANTIGRAVITY -> Triple("🌐 Đăng nhập Google Gemini (Antigravity)", AntigravityPurple, onOpenAntigravityLogin)
+                                    AiEngine.CLINE -> Triple("🌐 Đăng nhập OpenRouter cho Cline", ClineOrange, onOpenClineLogin)
                                 }
 
                                 Button(
@@ -1102,8 +1138,8 @@ private fun ChatScreen(
                                         } else {
                                             Triple("🌐 Đăng nhập OpenAI / ChatGPT", CodexGreen, onOpenCodexLogin)
                                         }
-                                        AiEngine.ANTIGRAVITY -> Triple("🌐 Đăng nhập bằng Google (Gmail)", AntigravityPurple, onOpenAntigravityLogin)
-                                        AiEngine.CLINE -> Triple("🌐 Đăng nhập bằng Google (Gmail)", ClineOrange, onOpenClineLogin)
+                                        AiEngine.ANTIGRAVITY -> Triple("🌐 Đăng nhập Google Gemini", AntigravityPurple, onOpenAntigravityLogin)
+                                        AiEngine.CLINE -> Triple("🌐 Đăng nhập OpenRouter cho Cline", ClineOrange, onOpenClineLogin)
                                     }
                                     Button(
                                         onClick = btnAction,
@@ -1482,8 +1518,8 @@ private fun Composer(
 ) {
     val isCodexDisconnected = state.activeEngine == AiEngine.CODEX && !state.isConnected
     val isAuthed = when (state.activeEngine) {
-        AiEngine.ANTIGRAVITY -> state.antigravityUser != null || state.antigravityApiKey.isNotBlank()
-        AiEngine.CLINE -> state.clineUser != null || state.clineApiKey.isNotBlank()
+        AiEngine.ANTIGRAVITY -> state.antigravityApiKey.isNotBlank() || !state.antigravityUser?.accessToken.isNullOrBlank()
+        AiEngine.CLINE -> state.clineApiKey.isNotBlank() || !state.clineUser?.accessToken.isNullOrBlank()
         AiEngine.CODEX -> state.isConnected && state.account != null
     }
 
@@ -1967,28 +2003,29 @@ private fun SettingsDialog(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
-                            if (state.antigravityUser != null) {
+                            val hasAntigravity = state.antigravityApiKey.isNotBlank() || !state.antigravityUser?.accessToken.isNullOrBlank()
+                            if (hasAntigravity) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("🟢", fontSize = 12.sp)
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column {
-                                        Text(state.antigravityUser.displayName, color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text(state.antigravityUser.email, color = SecondaryText, fontSize = 12.sp)
+                                        Text(state.antigravityUser?.displayName ?: "Google AI Studio", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(state.antigravityUser?.email ?: "Gemini API: Đã kích hoạt", color = SecondaryText, fontSize = 12.sp)
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedButton(onClick = onSignOutAntigravity) {
-                                    Text("Đăng xuất Google (Antigravity)", color = DangerRed, fontSize = 11.sp)
+                                    Text("Đăng xuất / Xóa Key", color = DangerRed, fontSize = 11.sp)
                                 }
                             } else {
-                                Text("Chưa đăng nhập Google cho Antigravity", color = SecondaryText, fontSize = 12.sp)
+                                Text("Chưa kích hoạt Google Gemini", color = SecondaryText, fontSize = 12.sp)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
                                     onClick = onOpenAntigravityLogin,
                                     colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("🌐 Đăng nhập Google (Gmail) qua Trình duyệt", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("🔑 Kích hoạt Gemini bằng API Key miễn phí", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -2006,28 +2043,29 @@ private fun SettingsDialog(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
-                            if (state.clineUser != null) {
+                            val hasCline = state.clineApiKey.isNotBlank() || !state.clineUser?.accessToken.isNullOrBlank()
+                            if (hasCline) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("🟢", fontSize = 12.sp)
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column {
-                                        Text(state.clineUser.displayName, color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text(state.clineUser.email, color = SecondaryText, fontSize = 12.sp)
+                                        Text(state.clineUser?.displayName ?: "OpenRouter AI", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(state.clineUser?.email ?: "OpenRouter Key: Đã kích hoạt", color = SecondaryText, fontSize = 12.sp)
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 OutlinedButton(onClick = onSignOutCline) {
-                                    Text("Đăng xuất Google (Cline)", color = DangerRed, fontSize = 11.sp)
+                                    Text("Đăng xuất / Xóa Key", color = DangerRed, fontSize = 11.sp)
                                 }
                             } else {
-                                Text("Chưa đăng nhập Google cho Cline", color = SecondaryText, fontSize = 12.sp)
+                                Text("Chưa kích hoạt OpenRouter cho Cline", color = SecondaryText, fontSize = 12.sp)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(
                                     onClick = onOpenClineLogin,
                                     colors = ButtonDefaults.buttonColors(containerColor = ClineOrange),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text("🌐 Đăng nhập Google (Gmail) qua Trình duyệt", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("🔑 Kích hoạt Cline bằng OpenRouter Key", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -2723,3 +2761,185 @@ fun darkFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedContainerColor = InputBackground,
     cursorColor = CodexGreen
 )
+
+@Composable
+private fun AntigravitySetupDialog(
+    initialKey: String,
+    onDismiss: () -> Unit,
+    onOpenBrowser: () -> Unit,
+    onSaveKey: (String) -> Unit
+) {
+    val context = LocalContext.current
+    var keyText by remember { mutableStateOf(initialKey) }
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AntigravityBrandIcon(size = 22.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Đăng nhập Google Gemini", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Mô hình Antigravity của Google DeepMind hoạt động qua Google AI Studio Gemini API hoàn toàn miễn phí.",
+                    color = SecondaryText,
+                    fontSize = 13.sp
+                )
+                Button(
+                    onClick = onOpenBrowser,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(vertical = 10.dp)
+                ) {
+                    Text("🌐 Mở Google AI Studio để sao chép Key", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    text = "Tài khoản Google của bạn đã có sẵn API Key (như trong ảnh chụp), bấm sao chép và dán vào bên dưới:",
+                    color = SecondaryText,
+                    fontSize = 12.sp
+                )
+                OutlinedTextField(
+                    value = keyText,
+                    onValueChange = { keyText = it },
+                    label = { Text("Gemini API Key (bắt đầu AIzaSy...)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = darkFieldColors(),
+                    trailingIcon = {
+                        TextButton(
+                            onClick = {
+                                val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                if (clipText.isNotBlank()) {
+                                    keyText = clipText.trim()
+                                    Toast.makeText(context, "Đã dán mã từ Clipboard", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("📋 Dán", color = AntigravityPurple, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (keyText.isBlank()) {
+                        Toast.makeText(context, "Vui lòng nhập hoặc dán Gemini API Key!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        onSaveKey(keyText.trim())
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AntigravityPurple),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Xác nhận & Bắt đầu dùng", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy", color = SecondaryText)
+            }
+        },
+        containerColor = PanelBackground
+    )
+}
+
+@Composable
+private fun ClineSetupDialog(
+    initialKey: String,
+    onDismiss: () -> Unit,
+    onOpenBrowser: () -> Unit,
+    onSaveKey: (String) -> Unit
+) {
+    val context = LocalContext.current
+    var keyText by remember { mutableStateOf(initialKey) }
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ClineBrandIcon(size = 22.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Đăng nhập Cline (OpenRouter)", color = PrimaryText, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Cline sử dụng OpenRouter để truy cập hàng chục mô hình AI mở miễn phí (DeepSeek R1, Llama 3.3, v.v.).",
+                    color = SecondaryText,
+                    fontSize = 13.sp
+                )
+                Button(
+                    onClick = onOpenBrowser,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClineOrange),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(vertical = 10.dp)
+                ) {
+                    Text("🌐 Mở OpenRouter Keys (Tạo/Lấy Key)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    text = "Dán OpenRouter API Key của bạn vào bên dưới:",
+                    color = SecondaryText,
+                    fontSize = 12.sp
+                )
+                OutlinedTextField(
+                    value = keyText,
+                    onValueChange = { keyText = it },
+                    label = { Text("OpenRouter Key (sk-or-v1-...)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = darkFieldColors(),
+                    trailingIcon = {
+                        TextButton(
+                            onClick = {
+                                val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                if (clipText.isNotBlank()) {
+                                    keyText = clipText.trim()
+                                    Toast.makeText(context, "Đã dán mã từ Clipboard", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("📋 Dán", color = ClineOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (keyText.isBlank()) {
+                        Toast.makeText(context, "Vui lòng nhập hoặc dán OpenRouter API Key!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        onSaveKey(keyText.trim())
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = ClineOrange),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Xác nhận & Bắt đầu dùng", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy", color = SecondaryText)
+            }
+        },
+        containerColor = PanelBackground
+    )
+}
