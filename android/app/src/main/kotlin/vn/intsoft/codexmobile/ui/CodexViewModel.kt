@@ -462,12 +462,14 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 endpoint = cleanEndpoint,
                 workspace = cleanWorkspace,
-                hasToken = hasCodexToken
+                hasToken = hasCodexToken,
+                connectionStatus = "Đang kết nối lại máy chủ…"
             )
         }
 
         viewModelScope.launch {
             webSocketClient.disconnect()
+            kotlinx.coroutines.delay(150)
             webSocketClient.connect(cleanEndpoint, cleanWorkspace)
         }
     }

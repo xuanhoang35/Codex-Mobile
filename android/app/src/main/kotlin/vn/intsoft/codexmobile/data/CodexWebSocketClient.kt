@@ -739,6 +739,7 @@ class CodexWebSocketClient(
 
     private inner class SocketListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            if (this@CodexWebSocketClient.webSocket !== webSocket && this@CodexWebSocketClient.webSocket != null) return
             reconnectAttempts.set(0L)
             reconnectScheduled.set(false)
             listener.onConnectionChanged("Đang xác thực…", true)
@@ -746,6 +747,7 @@ class CodexWebSocketClient(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (this@CodexWebSocketClient.webSocket !== webSocket && this@CodexWebSocketClient.webSocket != null) return
             handleMessage(text)
         }
 
@@ -754,6 +756,7 @@ class CodexWebSocketClient(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (this@CodexWebSocketClient.webSocket !== webSocket && this@CodexWebSocketClient.webSocket != null) return
             this@CodexWebSocketClient.webSocket = null
             if (!manualDisconnect) {
                 listener.onConnectionChanged("Kết nối đóng", false)
@@ -762,14 +765,27 @@ class CodexWebSocketClient(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (this@CodexWebSocketClient.webSocket !== webSocket && this@CodexWebSocketClient.webSocket != null) return
             this@CodexWebSocketClient.webSocket = null
             if (!manualDisconnect) {
-                val code = response?.code
+                val code = response?.code ?: run {
+                    val m = t.message ?: ""
+                    when {
+                        m.contains("530") -> 530
+                        m.contains("502") -> 502
+                        m.contains("503") -> 503
+                        m.contains("401") -> 401
+                        m.contains("403") -> 403
+                        m.contains("404") -> 404
+                        else -> null
+                    }
+                }
                 val msg = when (code) {
                     401 -> "401 Unauthorized: Sai hoặc thiếu Token Bearer"
                     403 -> "403 Forbidden: Bị từ chối truy cập"
                     404 -> "404 Not Found: Không tìm thấy WebSocket"
                     502, 503 -> "Lỗi $code: Máy chủ Codex chưa phản hồi"
+                    530 -> "Lỗi 530: Cloudflare Tunnel chưa chạy trên máy chủ (Error 1033)"
                     else -> t.localizedMessage ?: "Lỗi kết nối socket"
                 }
                 listener.onError(msg)
