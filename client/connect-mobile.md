@@ -1,31 +1,30 @@
-# Huong dan ket noi tu ung dung dien thoai (Codex Mobile App)
+# Hướng dẫn kết nối từ ứng dụng điện thoại (Codex Mobile App)
 
-## 1. Yeu cau chuan bi
-- Dien thoai (Android hoac iOS) da cai dat ung dung **Tailscale**.
-- Dien thoai da dang nhap vao cung mang Tailnet voi may chu.
-- Ung dung **Codex Mobile** (hoac client ho tro Codex App Server).
+## 1. Yêu cầu chuẩn bị
+- Điện thoại (Android hoặc iOS) kết nối Internet (qua 4G/5G hoặc WiFi thông thường).
+- Không bắt buộc dùng VPN/Tailscale do hệ thống đã được định tuyến an toàn qua Cloudflare Tunnel (`codex.webdemo.name.vn`).
+- Ứng dụng **Codex Mobile** (hoặc client hỗ trợ Codex App Server).
 
-## 2. Thong tin cau hinh tren App
-Trong giao dien ung dung tren dien thoai, vao muc Cai dat may chu (Server Settings) va dien:
+## 2. Thông tin cấu hình trên App
+Trong giao diện ứng dụng trên điện thoại, vào mục Cài đặt máy chủ (Server Settings) và điền:
 
 - **Server URL / WebSocket Endpoint**:
   ```text
-  wss://intsoft-codebank-vn.tailb240ce.ts.net:8443/
+  wss://codex.webdemo.name.vn/
   ```
-  *(Hoac su dung IP mang Tailscale: `wss://100.81.123.50:8443/`)*
 
-- **Capability Token (Ma xac thuc Bearer)**:
-  Lay ma token tren may chu:
+- **Capability Token (Mã xác thực Bearer)**:
+  Lấy mã token trên máy chủ:
   ```bash
   cat /home/codexapp/.codex/app-server-token
   ```
-  Dan chuoi token nay vao muc **Token / API Key**.
+  Dán chuỗi token này vào mục **Codex Secret Token**.
 
-- **Header xac thuc**:
+- **Header xác thực**:
   ```http
-  Authorization: Bearer <TOKEN_CUA_BAN>
+  Authorization: Bearer <TOKEN_CỦA_BẠN>
   ```
 
-## 3. Bat dau su dung
-- Nhan nut **Connect** hoac **Test Connection**.
-- Khi bao trang thai Connected, he thong se dong bo danh sach workspace tai `/srv/codex-workspaces` de ban bat dau ra lenh, lap trinh va quan ly may chu truc tiep tren dien thoai!
+## 3. Bắt đầu sử dụng
+- Nhấn nút **Lưu cài đặt** (Save).
+- Ứng dụng sẽ tự động kết nối qua WebSocket bảo mật và đồng bộ workspace tại `/srv/codex-workspaces` để bạn bắt đầu ra lệnh, lập trình và quản lý máy chủ trực tiếp trên điện thoại!

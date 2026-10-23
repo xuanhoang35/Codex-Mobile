@@ -2089,10 +2089,11 @@ private fun SettingsDialog(
                         label = "Thư mục Workspace (Server)"
                     )
                     Spacer(modifier = Modifier.height(6.dp))
+                    val tokenHint = if (state.hasToken) "Đã lưu Token (để trống nếu không đổi)" else "Nhập Bearer Token từ server"
                     DarkTextField(
                         value = token,
                         onValueChange = { token = it },
-                        label = "Codex Secret Token (tùy chọn)",
+                        label = "Codex Secret Token ($tokenHint)",
                         isPassword = true
                     )
                 }

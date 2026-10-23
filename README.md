@@ -28,7 +28,7 @@ Dự án hợp nhất toàn diện hệ sinh thái **Codex Mobile**: Bao gồm *
                                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    🌐 Máy chủ Remote Server (Tailscale)                     │
-│                intsoft-codebank-vn.tailb240ce.ts.net:8443                   │
+│                codex.webdemo.name.vn                   │
 │                                                                             │
 │  🔒 Tailscale Serve (Reverse Proxy HTTPS / WSS :8443)                       │
 │       │                                                                     │
@@ -120,5 +120,5 @@ Codex-Mobile/
 3. Chọn **Build > Build Bundle(s) / APK(s) > Build APK(s)** hoặc kết nối điện thoại và nhấn **Run (Shift + F10)**.
 4. Mở app trên điện thoại:
    - Vào **Cài đặt**: Đăng nhập Google (Gmail) để dùng Antigravity & Cline.
-   - Nhập Endpoint WebSocket của máy chủ (VD: `wss://intsoft-codebank-vn.tailb240ce.ts.net:8443/`).
+   - Nhập Endpoint WebSocket của máy chủ (VD: `wss://codex.webdemo.name.vn/`).
    - Chuyển đổi linh hoạt giữa 3 Engine ngay trên thanh công cụ!

@@ -4,7 +4,7 @@
  */
 const WebSocket = require('ws');
 
-const url = process.argv[2] || process.env.CODEX_URL || 'wss://intsoft-codebank-vn.tailb240ce.ts.net:8443/';
+const url = process.argv[2] || process.env.CODEX_URL || 'wss://codex.webdemo.name.vn/';
 const token = process.argv[3] || process.env.CODEX_TOKEN;
 
 if (!token) {

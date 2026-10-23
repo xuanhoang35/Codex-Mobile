@@ -31,6 +31,22 @@ class SecureTokenStore(context: Context) {
         prefs.edit().remove("auth_token").apply()
     }
 
+    fun saveCodexEndpoint(endpoint: String) {
+        prefs.edit().putString("codex_endpoint", endpoint).apply()
+    }
+
+    fun getCodexEndpoint(): String {
+        return prefs.getString("codex_endpoint", "wss://codex.webdemo.name.vn/") ?: "wss://codex.webdemo.name.vn/"
+    }
+
+    fun saveCodexWorkspace(workspace: String) {
+        prefs.edit().putString("codex_workspace", workspace).apply()
+    }
+
+    fun getCodexWorkspace(): String {
+        return prefs.getString("codex_workspace", "/srv/codex-workspaces") ?: "/srv/codex-workspaces"
+    }
+
     fun saveActiveEngine(engine: AiEngine) {
         prefs.edit().putString("active_engine", engine.id).apply()
     }

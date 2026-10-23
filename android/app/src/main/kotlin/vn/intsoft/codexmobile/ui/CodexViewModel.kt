@@ -201,6 +201,13 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
         val antigravityKey = tokenStore.getAntigravityApiKey()
         val clineKey = tokenStore.getClineApiKey()
         val clineEndpoint = tokenStore.getClineEndpoint()
+        val savedEndpoint = tokenStore.getCodexEndpoint()
+        val savedWorkspace = tokenStore.getCodexWorkspace()
+        val hasCodexToken = !tokenStore.getToken().isNullOrBlank()
+
+        webSocketClient.endpoint = savedEndpoint
+        webSocketClient.workspace = savedWorkspace
+        webSocketClient.token = tokenStore.getToken() ?: ""
 
         val models = multiEngineClient.getDefaultModelsForEngine(initialEngine)
         val initialUsage = when (initialEngine) {
@@ -218,6 +225,9 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
                 antigravityApiKey = antigravityKey,
                 clineApiKey = clineKey,
                 clineCustomEndpoint = clineEndpoint,
+                endpoint = savedEndpoint,
+                workspace = savedWorkspace,
+                hasToken = hasCodexToken,
                 availableModels = models,
                 selectedModelId = initialEngine.defaultModel,
                 usage = initialUsage,
@@ -410,8 +420,10 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     // Network & Session
     // -------------------------------------------------------------------------
     fun connect() {
+        if (_uiState.value.activeEngine != AiEngine.CODEX) return
         viewModelScope.launch {
             val state = _uiState.value
+            webSocketClient.token = tokenStore.getToken() ?: ""
             webSocketClient.connect(state.endpoint, state.workspace)
         }
     }
@@ -421,16 +433,30 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveSettings(endpoint: String, workspace: String, token: String) {
-        if (token.isNotBlank()) {
-            tokenStore.saveToken(token)
+        val cleanEndpoint = endpoint.trim().let { ep ->
+            when {
+                ep.startsWith("http://", ignoreCase = true) -> "ws://" + ep.substring(7)
+                ep.startsWith("https://", ignoreCase = true) -> "wss://" + ep.substring(8)
+                !ep.startsWith("ws://", ignoreCase = true) && !ep.startsWith("wss://", ignoreCase = true) -> "wss://$ep"
+                else -> ep
+            }
         }
-        val cleanEndpoint = endpoint.trim()
         val cleanWorkspace = workspace.trim()
+
+        if (token.isNotBlank()) {
+            tokenStore.saveToken(token.trim())
+            webSocketClient.token = token.trim()
+        }
+        tokenStore.saveCodexEndpoint(cleanEndpoint)
+        tokenStore.saveCodexWorkspace(cleanWorkspace)
+
+        val hasCodexToken = !tokenStore.getToken().isNullOrBlank()
 
         _uiState.update {
             it.copy(
                 endpoint = cleanEndpoint,
-                workspace = cleanWorkspace
+                workspace = cleanWorkspace,
+                hasToken = hasCodexToken
             )
         }
 
@@ -442,6 +468,8 @@ class CodexViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearToken() {
         tokenStore.clearToken()
+        webSocketClient.token = ""
+        _uiState.update { it.copy(hasToken = false) }
     }
 
     // -------------------------------------------------------------------------

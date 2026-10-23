@@ -18,13 +18,15 @@ class CodexWebSocketClient(
     var endpoint: String,
     var token: String,
     var workspace: String,
-    val listener: Listener
+    val listener: Listener,
+    var tokenProvider: (() -> String)? = null
 ) {
     constructor(tokenProvider: () -> String, listener: Listener) : this(
-        endpoint = "wss://intsoft-codebank-vn.tailb240ce.ts.net:8443/",
+        endpoint = "wss://codex.webdemo.name.vn/",
         token = tokenProvider(),
         workspace = "/srv/codex-workspaces",
-        listener = listener
+        listener = listener,
+        tokenProvider = tokenProvider
     )
 
     var activeThreadId: String? = null
@@ -92,18 +94,33 @@ class CodexWebSocketClient(
         if (webSocket != null) return
 
         try {
+            tokenProvider?.invoke()?.let { latestToken ->
+                if (latestToken.isNotBlank()) {
+                    this.token = latestToken.trim()
+                }
+            }
+
             if (reconnectExecutor.isShutdown) {
                 reconnectExecutor = Executors.newSingleThreadScheduledExecutor()
             }
 
             listener.onConnectionChanged("Đang kết nối…", false)
-            val requestBuilder = Request.Builder().url(endpoint)
+            val cleanUrl = endpoint.trim().let { ep ->
+                when {
+                    ep.startsWith("http://", ignoreCase = true) -> "ws://" + ep.substring(7)
+                    ep.startsWith("https://", ignoreCase = true) -> "wss://" + ep.substring(8)
+                    !ep.startsWith("ws://", ignoreCase = true) && !ep.startsWith("wss://", ignoreCase = true) -> "wss://$ep"
+                    else -> ep
+                }
+            }
+            val requestBuilder = Request.Builder().url(cleanUrl)
             if (token.isNotBlank()) {
-                requestBuilder.header("Authorization", "Bearer $token")
+                requestBuilder.header("Authorization", "Bearer ${token.trim()}")
             }
             webSocket = httpClient.newWebSocket(requestBuilder.build(), SocketListener())
         } catch (t: Throwable) {
-            listener.onConnectionChanged("Chưa kết nối server", false)
+            val errorMsg = t.localizedMessage ?: "Chưa kết nối server"
+            listener.onConnectionChanged("Lỗi: $errorMsg", false)
         }
     }
 
@@ -724,9 +741,16 @@ class CodexWebSocketClient(
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             this@CodexWebSocketClient.webSocket = null
             if (!manualDisconnect) {
-                val msg = t.localizedMessage ?: "Lỗi kết nối socket"
+                val code = response?.code
+                val msg = when (code) {
+                    401 -> "401 Unauthorized: Sai hoặc thiếu Token Bearer"
+                    403 -> "403 Forbidden: Bị từ chối truy cập"
+                    404 -> "404 Not Found: Không tìm thấy WebSocket"
+                    502, 503 -> "Lỗi $code: Máy chủ Codex chưa phản hồi"
+                    else -> t.localizedMessage ?: "Lỗi kết nối socket"
+                }
                 listener.onError(msg)
-                listener.onConnectionChanged("Lỗi: $msg", false)
+                listener.onConnectionChanged(msg, false)
                 scheduleReconnect()
             }
         }
